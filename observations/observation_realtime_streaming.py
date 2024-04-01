@@ -1078,10 +1078,7 @@ try:
               druid_urls = {
                     'Coordinator':    config.get('DRUID','coordinator_url'),
                     'Overlord':       config.get('DRUID','overload_url'),
-                    'Historical':     config.get('DRUID','historical_url'),
-                    'MiddleManager':  config.get('DRUID','middleManager_url'),
-                    'Broker':         config.get('DRUID','broker_url'),
-                    'Router':         config.get("DRUID",'router_url')
+                    'Historical':     config.get('DRUID','historical_url')
                 }
 
               health_status = check_all_druid_services_health(druid_urls)
@@ -1092,7 +1089,7 @@ try:
                       health_status_count = health_status_count + 1
                   else:
                       infoLogger.info(f"{service} is not running. Status code: {status['status_code']}")
-              if health_status_count == 6 :
+              if health_status_count == 3 :
                   infoLogger.info("ALL SERVICES ARE WORKING IN DRUID")
                   obj_creation(msg_data)
                   main_data_extraction(msg_data)
