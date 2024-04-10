@@ -1,23 +1,30 @@
 #!/bin/bash
 
-#start survey_realtime_streaming
-/opt/sparkjobs/faust_as_service/faust.sh  survey/survey_realtime_streaming survey/ &
+# Read config.ini and extract file list
+echo "Reading config.ini and extracting file list..."
+# FILE_LIST=$(awk -F= '/\[services\]/{flag=1;next}/\[.*\]/{flag=0}flag{print $0}' config.ini | grep 'file_list' | cut -d '=' -f 2 | sed "s/\[//;s/\]//;s/'//g")
 
-#start observation_realtime_streaming
-/opt/sparkjobs/faust_as_service/faust.sh  observations/observation_realtime_streaming observations/ &
+FILE_LIST=$(cat config.ini | grep 'file_list' | cut -d '=' -f 2 | sed "s/\[//;s/\]//;s/'//g")
+echo "The file list is: $FILE_LIST"
 
-#start observations
-#/opt/sparkjobs/faust_as_service/faust.sh  observations/py_observation_streaming observations/ &
+# Start each service listed in the config.ini file
+echo "Starting services..."
+# Split the FILE_LIST into an array
+IFS=',' read -r -a services <<< "$FILE_LIST"
+for service in "${services[@]}"; do
+    # Extract service path and arguments
+    service_path=$(echo "$service" | awk -F ' ' '{print $1}')
+    service_args=$(echo "$service" | awk -F ' ' '{print $2}')
+    echo "Starting service: $service_path with arguments: $service_args"
+    /opt/sparkjobs/faust_as_service/faust.sh "$service_path" "$service_args" &
+done
 
-#start observation_evidence
-#/opt/sparkjobs/faust_as_service/faust.sh  observations/py_observation_evidence_streaming observations/ &
-
-#start survey
-#/opt/sparkjobs/faust_as_service/faust.sh  survey/py_survey_streaming survey/ &
-
-#start survey_evidence
-#/opt/sparkjobs/faust_as_service/faust.sh  survey/py_survey_evidence_streaming survey/ &
-
+echo "Waiting for background processes to finish..."
 wait -n
 
-exit $?
+# Log exit status
+exit_status=$?
+echo "Exit status: $exit_status"
+
+# Exit with the exit status of the last command executed
+exit $exit_status
