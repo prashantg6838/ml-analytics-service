@@ -2,9 +2,8 @@
 
 # Read config.ini and extract file list
 echo "Reading config.ini and extracting file list..."
-# FILE_LIST=$(awk -F= '/\[services\]/{flag=1;next}/\[.*\]/{flag=0}flag{print $0}' config.ini | grep 'file_list' | cut -d '=' -f 2 | sed "s/\[//;s/\]//;s/'//g")
 
-FILE_LIST=$(cat config.ini | grep 'file_list' | cut -d '=' -f 2 | sed "s/\[//;s/\]//;s/'//g")
+FILE_LIST=$(cat config.ini | grep 'faust_applications_list' | cut -d '=' -f 2 | sed "s/\[//;s/\]//;s/'//g")
 echo "The file list is: $FILE_LIST"
 
 # Start each service listed in the config.ini file
