@@ -145,6 +145,25 @@ def check_datasource_existence(datasource_name):
   except requests.RequestException as e:
       errorLogger.error(f"Error fetching datasources: {e}")
 
+def check_service_health(service_url):
+
+    try:
+        response = requests.get(service_url)
+        if response.status_code == 200:
+            return True, response.status_code
+        else:
+            return False, response.status_code
+    except requests.ConnectionError:
+        # Could not connect to the service
+        return False, -1
+
+def check_all_druid_services_health(druid_urls):
+
+    health_status = {}
+    for service, url in druid_urls.items():
+        is_running, status_code = check_service_health(url)
+        health_status[service] = {'is_running': is_running, 'status_code': status_code}
+    return health_status
 
 def flatten_json(y):
   out = {}
@@ -1056,8 +1075,27 @@ try:
               msg_val = msg.decode('utf-8')
               msg_data = json.loads(msg_val)
               infoLogger.info("========== START OF OBSERVATION SUBMISSION EVENT PROCESSING ==========")
-              obj_creation(msg_data)
-              main_data_extraction(msg_data)
+              druid_urls = {
+                    'Coordinator':    config.get('DRUID','coordinator_url'),
+                    'Overlord':       config.get('DRUID','overload_url'),
+                    'Historical':     config.get('DRUID','historical_url')
+                }
+
+              health_status = check_all_druid_services_health(druid_urls)
+              health_status_count = 0
+              for service, status in health_status.items():
+                  if status['is_running']:
+                      infoLogger.info(f"{service} is running.")
+                      health_status_count = health_status_count + 1
+                  else:
+                      infoLogger.info(f"{service} is not running. Status code: {status['status_code']}")
+              if health_status_count == 3 :
+                  infoLogger.info("ALL SERVICES ARE WORKING IN DRUID")
+                  obj_creation(msg_data)
+                  main_data_extraction(msg_data)
+              else :
+                  pass
+                  infoLogger.info("DRUID IS DOWN")
               infoLogger.info("********** END OF OBSERVATION SUBMISSION EVENT PROCESSING **********")
             except KeyError as ke:
                 # Log KeyError
