@@ -970,7 +970,7 @@ try:
       orgArr = orgName(obSub.get('userProfile', {}).get('organisations',None))
       if orgArr:
           # observationSubQuestionsObj['schoolId'] = orgArr[0].get("organisation_id")
-          observationSubQuestionsObj['organisationName'] = orgArr[0].get("organisation_name")
+          observationSubQuestionsObj['organisationName'] = orgArr[0].get("orgName")
       else:
           # observationSubQuestionsObj['schoolId'] = None
           observationSubQuestionsObj['organisationName'] = None
