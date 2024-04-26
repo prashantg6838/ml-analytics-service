@@ -21,6 +21,8 @@ from pydruid.query import QueryBuilder
 from pydruid.utils.aggregators import *
 from pydruid.utils.filters import Dimension
 from urllib.parse import urlparse
+from pymongo import MongoClient
+from bson.objectid import ObjectId 
 
 config_path = os.path.split(os.path.dirname(os.path.abspath(__file__)))
 config = ConfigParser(interpolation=ExtendedInterpolation())
@@ -83,6 +85,12 @@ infoLogger.addHandler(debug_logHandler)
 infoLogger.addHandler(debug_logBackuphandler)
 
 domArr = []
+
+# Initialize Mongo db collection 
+
+clientProd = MongoClient(config.get('MONGO', 'url'))
+db = clientProd[config.get('MONGO', 'database_name')]
+observationSubCollec = db[config.get('MONGO', 'observation_sub_collection')]
 
 kafka_url = config.get("KAFKA", "url")
 #consume the message from kafka topic
@@ -1096,6 +1104,15 @@ try:
               else :
                   pass
                   infoLogger.info("DRUID IS DOWN")
+                  
+              try : 
+                observationSubCollec.update_one(
+                    {"_id": ObjectId(msg_data['_id'])},
+                    {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
+                )
+                infoLogger.info("Updated the Mongo observation submission collection")
+              except KeyError as ke :
+                  errorLogger.error(f"KeyError occurred: {ke}")    
               infoLogger.info("********** END OF OBSERVATION SUBMISSION EVENT PROCESSING **********")
             except KeyError as ke:
                 # Log KeyError
