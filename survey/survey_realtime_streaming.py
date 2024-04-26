@@ -24,6 +24,8 @@ from pydruid.query import QueryBuilder
 from pydruid.utils.aggregators import *
 from pydruid.utils.filters import Dimension
 from urllib.parse import urlparse
+from pymongo import MongoClient
+from bson.objectid import ObjectId 
 
 config_path = os.path.split(os.path.dirname(os.path.abspath(__file__)))
 config = ConfigParser(interpolation=ExtendedInterpolation())
@@ -86,6 +88,11 @@ debug_logBackuphandler = TimedRotatingFileHandler(f"{file_name_for_debug_log}",w
 infoLogger.addHandler(debug_logHandler)
 infoLogger.addHandler(debug_logBackuphandler)
 
+# Initialize Mongo db collection 
+
+clientProd = MongoClient(config.get('MONGO', 'url'))
+db = clientProd[config.get('MONGO', 'database_name')]
+surveySubCollec = db[config.get('MONGO', 'survey_submissions_collection')]
 
 # Initialize Kafka producer and Faust app
 try:
@@ -804,6 +811,15 @@ try:
                 else :
                     pass
                     infoLogger.info("DRUID IS DOWN")
+                    
+                try : 
+                    surveySubCollec.update_one(
+                        {"_id": ObjectId(msg_data['_id'])},
+                        {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
+                    )
+                    infoLogger.info("Updated the Mongo survey submission collection")
+                except KeyError as ke :
+                    errorLogger.error(f"KeyError occurred: {ke}")    
                 infoLogger.info("********** END OF SURVEY SUBMISSION EVENT PROCESSING **********")
             except KeyError as ke:
                 # Log KeyError
