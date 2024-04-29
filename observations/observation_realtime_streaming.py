@@ -1108,9 +1108,8 @@ try:
               try : 
                 observationSubCollec.update_one(
                 {"_id": ObjectId(msg_data['_id'])},
-                {"$set": {
-                    "datapipeline.processed_date": datetime.datetime.now(),
-                    "datapipeline.status": msg_data['status']
+                {"$push": {
+                    "datapipeline": {"processed_date": datetime.datetime.now(), "status": msg_data['status']}       
                 }}
                 )
                 infoLogger.info("Updated the Mongo observation submission collection")
