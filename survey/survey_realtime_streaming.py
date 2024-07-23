@@ -624,9 +624,9 @@ def main_data_extraction(obSub):
                         {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
                     )
         infoLogger.info("Updated the Mongo survey submission collection after inserting data to sl-survey-meta datasource") 
-        infoLogger.info(f"Data with submission_id {_id} is being inserted into the sl-survey-meta datasource.")
+        infoLogger.info(f"Data with submission_id {surveySubmissionId} is being inserted into the sl-survey-meta datasource.")
     else:
-        infoLogger.info(f"Data with submission_id {_id} is already exists in the sl-survey-meta datasource.")
+        infoLogger.info(f"Data with submission_id {surveySubmissionId} is already exists in the sl-survey-meta datasource.")
 
     # Insert data to sl-survey-status-started druid datasource if status is started
     # processing for sl-survey-status-started datsource 
@@ -640,14 +640,14 @@ def main_data_extraction(obSub):
             survey_status['startedAt'] = obSub['createdAt']
             producer.send((config.get("KAFKA", "survey_started_druid_topic")), json.dumps(survey_status).encode('utf-8'))
             producer.flush()
-            infoLogger.info(f"Data with submission_id {_id} is being inserted into the sl-survey-status-started datasource.")
+            infoLogger.info(f"Data with submission_id {surveySubmissionId} is being inserted into the sl-survey-status-started datasource.")
             surveySubCollec.update_one(
                         {"_id": ObjectId(surveySubmissionId)},
                         {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
                     )
             infoLogger.info("Updated the Mongo survey submission collection after inserting data to sl-survey-status-started datasource") 
         else:
-            infoLogger.info(f"Data with submission_id {_id} is already exists in the sl-survey-status-started datasource.")
+            infoLogger.info(f"Data with submission_id {surveySubmissionId} is already exists in the sl-survey-status-started datasource.")
 
     
     # Insert data to sl-survey-status-inprogress druid datasource if status is inprogress
@@ -667,9 +667,9 @@ def main_data_extraction(obSub):
                         {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
                     )
             infoLogger.info("Updated the Mongo survey submission collection after inserting data to sl-survey-status-inprogress datasource") 
-            infoLogger.info(f"Data with submission_id {_id} is being inserted into the sl-survey-status-inprogress datasource.")
+            infoLogger.info(f"Data with submission_id {surveySubmissionId} is being inserted into the sl-survey-status-inprogress datasource.")
         else:
-            infoLogger.info(f"Data with submission_id {_id} is already exists in the sl-survey-status-inprogress datasource.")
+            infoLogger.info(f"Data with submission_id {surveySubmissionId} is already exists in the sl-survey-status-inprogress datasource.")
     
     # Insert data to sl-survey-status-completed druid datasource if status is inprogress
     # processing for sl-survey-status-completed datsource 
@@ -688,9 +688,9 @@ def main_data_extraction(obSub):
                         {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
                     )
             infoLogger.info("Updated the Mongo survey submission collection after inserting data to sl-survey-status-completed datasource") 
-            infoLogger.info(f"Data with submission_id {_id} is being inserted into the sl-survey-status-completed datasource")
+            infoLogger.info(f"Data with submission_id {surveySubmissionId} is being inserted into the sl-survey-status-completed datasource")
         else:
-            infoLogger.info(f"Data with submission_id {_id} is already exists in the sl-survey-status-completed datasource")
+            infoLogger.info(f"Data with submission_id {surveySubmissionId} is already exists in the sl-survey-status-completed datasource")
 
     infoLogger.info(f"Completed processing kafka event for the Survey Submission Id : {obSub['_id']}. For Survey Status report")
 
@@ -700,26 +700,15 @@ try:
     async def surveyFaust(consumer):
         '''Faust agent to consume messages from Kafka and process them'''
         async for msg in consumer:
-            try:
-                msg_val = msg.decode('utf-8')
-                msg_data = json.loads(msg_val)
-                
-                infoLogger.info(f"========== START OF SURVEY SUBMISSION EVENT PROCESSING - {current_date} ==========")
-                
-                obj_creation(msg_data)
-                main_data_extraction(msg_data)
-                try : 
-                    surveySubCollec.update_one(
-                        {"_id": ObjectId(msg_data['_id'])},
-                        {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
-                    )
-                    infoLogger.info("Updated the Mongo survey submission collection")   
-                except KeyError as ke :
-                    errorLogger.error(f"KeyError occurred: {ke}")    
-                infoLogger.info(f"********** END OF SURVEY SUBMISSION EVENT PROCESSING - {current_date} **********")
-            except KeyError as ke:
-                # Log KeyError
-                errorLogger.error(f"KeyError occurred: {ke}")
+            msg_val = msg.decode('utf-8')
+            msg_data = json.loads(msg_val)
+            
+            infoLogger.info(f"========== START OF SURVEY SUBMISSION EVENT PROCESSING - {current_date} ==========")
+            
+            obj_creation(msg_data)
+            main_data_extraction(msg_data)
+            
+            infoLogger.info(f"********** END OF SURVEY SUBMISSION EVENT PROCESSING - {current_date} **********")
 except Exception as e:
     # Log any other exceptions
     errorLogger.error(f"Error in surveyFaust function: {e}")
