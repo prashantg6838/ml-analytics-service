@@ -187,7 +187,8 @@ def check_survey_submission_id_existance(key,column_name,table_name):
                 return False             
         except Exception as e:
             # Log any errors that occur during Druid query execution
-            errorLogger.error(f"Error checking survey_submission_id existence in Druid: {e}")
+            errorLogger.error(e, exc_info=True)
+            # errorLogger.error(f"Error checking survey_submission_id existence in Druid: {e}")
    
 def check_datasource_existence(datasource_name):
     host = config.get('DRUID', 'datasource_url')
@@ -200,7 +201,7 @@ def check_datasource_existence(datasource_name):
         else : 
             return False
     except requests.RequestException as e:
-        errorLogger.error(f"Error fetching datasources: {e}")  
+        errorLogger.error(e, exc_info=True)  
  
 def flatten_json(y):
     out = {}
@@ -703,12 +704,12 @@ try:
             msg_val = msg.decode('utf-8')
             msg_data = json.loads(msg_val)
             
-            infoLogger.info(f"========== START OF SURVEY SUBMISSION EVENT PROCESSING - {current_date} ==========")
+            infoLogger.info(f"========== START OF SURVEY SUBMISSION EVENT PROCESSING - {datetime.datetime.now()} ==========")
             
             obj_creation(msg_data)
             main_data_extraction(msg_data)
             
-            infoLogger.info(f"********** END OF SURVEY SUBMISSION EVENT PROCESSING - {current_date} **********")
+            infoLogger.info(f"********** END OF SURVEY SUBMISSION EVENT PROCESSING - {datetime.datetime.now()} **********")
 except Exception as e:
     # Log any other exceptions
     errorLogger.error(f"Error in surveyFaust function: {e}")
