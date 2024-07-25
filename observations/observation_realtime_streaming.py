@@ -107,109 +107,63 @@ producer = KafkaProducer(bootstrap_servers=[kafka_url])
 # # Define function to check if observation submission Id exists in Druid
 def check_observation_submission_id_existance(observationId,column_name,table_name):
   try:
-      # Establish connection to Druid
-      url = config.get("DRUID","sql_url")
-      url = str(url)
-      parsed_url = urlparse(url)
+    # Establish connection to Druid
+    url = config.get("DRUID","sql_url")
+    url = str(url)
+    parsed_url = urlparse(url)
 
-      host = parsed_url.hostname
-      port = int(parsed_url.port)
-      path = parsed_url.path
-      scheme = parsed_url.scheme
+    host = parsed_url.hostname
+    port = int(parsed_url.port)
+    path = parsed_url.path
+    scheme = parsed_url.scheme
 
-      conn = connect(host=host, port=port, path=path, scheme=scheme)
-      cur = conn.cursor()
-      response = check_datasource_existence(table_name)
-      if response == True:
-          # Query to check existence of observation submission Id in Druid table
-          query = f"SELECT COUNT(*) FROM \"{table_name}\" WHERE \"{column_name}\" = '{observationId}'"
-          cur.execute(query)
-          result = cur.fetchone()
-          count = result[0]
-          infoLogger.info(f"Found {count} entires in {table_name}")
-          # if count == 0 means observation_submission_id not exits in the datasource
-          # if count > 0 means observation_submission_id exits in datasource 
-          if count == 0:
-              return True
-          else:
-              return False
-      else:
-          # Since the table doesn't exist, return True to allow data insertion initially 
-          return True             
+    conn = connect(host=host, port=port, path=path, scheme=scheme)
+    cur = conn.cursor()
+    response = check_datasource_existence(table_name)
+    if response == True:
+        # Query to check existence of observation submission Id in Druid table
+        query = f"SELECT COUNT(*) FROM \"{table_name}\" WHERE \"{column_name}\" = '{observationId}'"
+        cur.execute(query)
+        result = cur.fetchone()
+        count = result[0]
+        infoLogger.info(f"Found {count} entires in {table_name}")
+        # if count == 0 means observation_submission_id not exits in the datasource
+        # if count > 0 means observation_submission_id exits in datasource 
+        if count == 0:
+            return False
+        else:
+            return True
+    else:
+        # Since the table doesn't exist, return True to allow data insertion initially 
+        return False            
   except Exception as e:
-      # Log any errors that occur during Druid query execution
-      errorLogger.error(f"Error checking observation_submission_id existence in Druid: {e}")
+    # Log any errors that occur during Druid query execution
+    errorLogger.error(e,exc_info=True)
    
 def check_datasource_existence(datasource_name):
   try : 
-      host = config.get('DRUID', 'datasource_url')
-      response = requests.get(host)
-      if response.status_code == 200:
-        datasources = response.json()
+    host = config.get('DRUID', 'datasource_url')
+    response = requests.get(host)
+    if response.status_code == 200:
+      datasources = response.json()
       if datasource_name in datasources : 
         return True
       else : 
         return False
+    else :
+        return False
   except requests.RequestException as e:
       errorLogger.error(f"Error fetching datasources: {e}")
-
-def check_service_health(service_url):
-
-    try:
-        response = requests.get(service_url)
-        if response.status_code == 200:
-            return True, response.status_code
-        else:
-            return False, response.status_code
-    except requests.ConnectionError:
-        # Could not connect to the service
-        return False, -1
-
-def check_all_druid_services_health(druid_urls):
-
-    health_status = {}
-    for service, url in druid_urls.items():
-        is_running, status_code = check_service_health(url)
-        health_status[service] = {'is_running': is_running, 'status_code': status_code}
-    return health_status
-
-def flatten_json(y):
-  out = {}
-
-  def flatten(x, name=''):
-    # If the Nested key-value pair is of dict type
-    if isinstance(x, dict):
-        for a in x:
-            flatten(x[a], name + a + '-')
-
-    # If the Nested key-value pair is of list type
-    elif isinstance(x, list):
-        if not x:  # Check if the list is empty
-            out[name[:-1]] = "null"
-        else:
-            for i, a in enumerate(x):
-                flatten(a, name + str(i) + '-')
-
-    # If the Nested key-value pair is of other types
-    else:
-        # Replace None, empty string, or empty list with "null"
-        if x is None or x == '' or x == []:
-            out[name[:-1]] = "null"
-        else:
-            out[name[:-1]] = x
-
-  flatten(y)
-  return out
 
 def orgName(val):
   orgarr = []
   if val is not None:
     for org in val:
-        orgObj = {}
-        if org["isSchool"] == False:
-            orgObj['orgId'] = org['organisationId']
-            orgObj['orgName'] = org["orgName"]
-            orgarr.append(orgObj)
+      orgObj = {}
+      if org["isSchool"] == False:
+          orgObj['orgId'] = org['organisationId']
+          orgObj['orgName'] = ''
+          orgarr.append(orgObj)
   return orgarr
 
 try:
@@ -268,10 +222,11 @@ try:
   def obj_creation(obSub):
     # Debug log for survey submission ID
     infoLogger.info(f"Started to process kafka event for the observation Submission Id : {obSub['_id']}. For Observation Question report")
-    observationSubmissionId =  str(obSub['_id'])  
-    if check_observation_submission_id_existance(observationSubmissionId,"observationSubmissionId","sl-observation"):
-      infoLogger.info(f"No data duplection for the Submission ID : {observationSubmissionId} in sl-observation ")  
-      if obSub['status'] == 'completed': 
+    if obSub['status'] == 'completed': 
+      observationSubmissionId =  str(obSub['_id'])
+      submission_exits = check_observation_submission_id_existance(observationSubmissionId,"observationSubmissionId","sl-observation")
+      if submission_exits == False:
+        infoLogger.info(f"No data duplection for the Submission ID : {observationSubmissionId} in sl-observation ")  
         if 'isAPrivateProgram' in obSub :
           completedDate = None
           try:
@@ -722,23 +677,24 @@ try:
                   except KeyError :
                     observationSubQuestionsObj["isRubricDriven"] = False
 
-                  flatten_userprofile = flatten_json(obSub['userProfile'])
-                  new_dict = {}
-                  for key in flatten_userprofile:
-                    string_without_integer = re.sub(r'\d+', '', key)
-                    updated_string = string_without_integer.replace("--", "-")
-                    # Check if the value associated with the key is not None
-                    if flatten_userprofile[key] is not None:
-                        if updated_string in new_dict:
-                            # Perform addition only if both values are not None
-                            if new_dict[updated_string] is not None:
-                                new_dict[updated_string] += "," + str(flatten_userprofile[key])
-                            else:
-                                new_dict[updated_string] = str(flatten_userprofile[key])
-                        else:
-                            new_dict[updated_string] = str(flatten_userprofile[key])
+                  # flatten_userprofile = flatten_json(obSub['userProfile'])
+                  # new_dict = {}
+                  # for key in flatten_userprofile:
+                  #   string_without_integer = re.sub(r'\d+', '', key)
+                  #   updated_string = string_without_integer.replace("--", "-")
+                  #   # Check if the value associated with the key is not None
+                  #   if flatten_userprofile[key] is not None:
+                  #       if updated_string in new_dict:
+                  #           # Perform addition only if both values are not None
+                  #           if new_dict[updated_string] is not None:
+                  #               new_dict[updated_string] += "," + str(flatten_userprofile[key])
+                  #           else:
+                  #               new_dict[updated_string] = str(flatten_userprofile[key])
+                  #       else:
+                  #           new_dict[updated_string] = str(flatten_userprofile[key])
 
-                  observationSubQuestionsObj['userProfile'] = str(new_dict)
+                  # observationSubQuestionsObj['userProfile'] = str(new_dict)
+                  observationSubQuestionsObj['userProfile'] = ''
                   return observationSubQuestionsObj
 
                 def fetchingQuestiondetails(ansFn, instNumber):        
@@ -759,6 +715,10 @@ try:
                                   json.dumps(finalObj).encode('utf-8')
                                 )
                                 producer.flush()
+                                observationSubCollec.update_one(
+                                    {"_id": ObjectId(finalObj['observationSubmissionId'])},
+                                    {"$set": {"datapipeline.processed_date": datetime.datetime.now()}})
+                                infoLogger.info("Updated the Mongo observation submission collection after inserting data into sl-observation datasource")
                                 infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) inserted into sl-observation datasource")
                           else :
                             finalObj = {}
@@ -775,6 +735,10 @@ try:
                                 json.dumps(finalObj).encode('utf-8')
                               )
                               producer.flush()
+                              observationSubCollec.update_one(
+                                    {"_id": ObjectId(finalObj['observationSubmissionId'])},
+                                    {"$set": {"datapipeline.processed_date": datetime.datetime.now()}})
+                              infoLogger.info("Updated the Mongo observation submission collection after inserting data into sl-observation datasource")
                               infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) inserted into sl-observation datasource")
                       except KeyError:
                         pass
@@ -801,6 +765,10 @@ try:
                                       json.dumps(finalObj).encode('utf-8')
                                     )
                                     producer.flush()
+                                    observationSubCollec.update_one(
+                                    {"_id": ObjectId(finalObj['observationSubmissionId'])},
+                                    {"$set": {"datapipeline.processed_date": datetime.datetime.now()}})
+                                    infoLogger.info("Updated the Mongo observation submission collection after inserting data into sl-observation datasource")
                                     infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) inserted into sl-observation datasource")
                               else :
                                 finalObj = {}
@@ -817,6 +785,10 @@ try:
                                     json.dumps(finalObj).encode('utf-8')
                                   )
                                   producer.flush()
+                                  observationSubCollec.update_one(
+                                    {"_id": ObjectId(finalObj['observationSubmissionId'])},
+                                    {"$set": {"datapipeline.processed_date": datetime.datetime.now()}})
+                                  infoLogger.info("Updated the Mongo observation submission collection after inserting data into sl-observation datasource")
                                   infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) inserted into sl-observation datasource")
                               
                           elif type(ansFn['value']) == list:
@@ -839,6 +811,10 @@ try:
                                         json.dumps(finalObj).encode('utf-8')
                                       )
                                       producer.flush()
+                                      observationSubCollec.update_one(
+                                            {"_id": ObjectId(finalObj['observationSubmissionId'])},
+                                            {"$set": {"datapipeline.processed_date": datetime.datetime.now()}})
+                                      infoLogger.info("Updated the Mongo observation submission collection after inserting data into sl-observation datasource")
                                       infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) inserted into sl-observation datasource")
                                 else :
                                   finalObj = {}
@@ -856,6 +832,10 @@ try:
                                       json.dumps(finalObj).encode('utf-8')
                                     )
                                     producer.flush()
+                                    observationSubCollec.update_one(
+                                    {"_id": ObjectId(finalObj['observationSubmissionId'])},
+                                    {"$set": {"datapipeline.processed_date": datetime.datetime.now()}})
+                                    infoLogger.info("Updated the Mongo observation submission collection after inserting data into sl-observation datasource")
                                     infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) inserted into sl-observation datasource")
                                 labelIndex = labelIndex + 1
                         except KeyError:
@@ -880,9 +860,9 @@ try:
                 except KeyError:
                   pass    
       else:
-          infoLogger.info(f"Observation Submission is not in completed status" )
+        infoLogger.info(f"observation_Submission_id {observationSubmissionId} is already exists in the sl-observation datasource.") 
     else:
-       infoLogger.info(f"observation_Submission_id {observationSubmissionId} is already exists in the sl-observation datasource.") 
+      infoLogger.info(f"Observation Submission is not in completed status" )
     infoLogger.info(f"Completed processing kafka event for the Observation Submission Id : {obSub['_id']}. For Observation Question report ")                    
 except Exception as e:
   errorLogger.error(e, exc_info=True)
@@ -891,179 +871,171 @@ except Exception as e:
 try:
   def main_data_extraction(obSub):
     '''Function to process observation submission data before sending it to Kafka topics'''
+    infoLogger.info(f"Starting to process kafka event for the observation Submission Id : {obSub['_id']}. For Observation Status report")
     try:
-      infoLogger.info(f"Starting to process kafka event for the observation Submission Id : {obSub['_id']}. For Observation Status report")
-      # Initialize dictionary for storing observation submission data
-      observationSubQuestionsObj = {}
-      observation_status = {}
-      
-      # Extract various attributes from observation submission object
-      observationSubQuestionsObj['observationId'] = str(obSub.get('observationId', ''))
-      observationSubQuestionsObj['observationName'] = str(obSub.get('observationInformation', {}).get('name', ''))
-      observationSubQuestionsObj['observationSubmissionId'] = obSub.get('_id', '')
-      observationSubQuestionsObj['createdAt'] = obSub.get('createdAt', '')
-      try:
-        observationSubQuestionsObj['createdBy'] = obSub['createdBy']
-      except KeyError:
-        observationSubQuestionsObj['createdBy'] = ''
-      observationSubQuestionsObj['entity'] = str(obSub['entityId'])
-      observationSubQuestionsObj['entityExternalId'] = obSub['entityExternalId']
-      observationSubQuestionsObj['entityType'] =obSub['entityType']
-      observationSubQuestionsObj["solutionId"] = obSub["solutionId"],
-      observationSubQuestionsObj["solutionExternalId"] = obSub["solutionExternalId"]
-      try : 
-        if 'solutionInfo' in obSub.keys():
-          solutionObj = obSub['solutionInfo']
-          observationSubQuestionsObj['solutionName'] = str(solutionObj.get('name',''))
-      except KeyError:
-        observationSubQuestionsObj['solutionName'] = ''
-      try:
-        if obSub["isRubricDriven"] == True and obSub["criteriaLevelReport"] == True:
-          observationSubQuestionsObj['solutionType'] = "observation_with_rubric"
-        elif obSub["isRubricDriven"] == True and obSub["criteriaLevelReport"] == False:
-          observationSubQuestionsObj['solutionType'] = "observation_with_rubric_no_criteria_level_report"
-        else:
+      observationSubmissionId =  str(obSub['_id'])
+      submission_exits_in_meta = check_observation_submission_id_existance(observationSubmissionId,"observationSubmissionId","sl-observation-meta")
+      if submission_exits_in_meta == False:
+        infoLogger.info(f"No data duplection for the Submission ID : {observationSubmissionId} in sl-observation-meta ")  
+        # Initialize dictionary for storing observation submission data
+        observationSubQuestionsObj = {}
+        observation_status = {}
+        # Extract various attributes from observation submission object
+        observationSubQuestionsObj['observationId'] = str(obSub.get('observationId', ''))
+        observationSubQuestionsObj['observationName'] = str(obSub.get('observationInformation', {}).get('name', ''))
+        observationSubQuestionsObj['observationSubmissionId'] = obSub.get('_id', '')
+        observationSubQuestionsObj['createdAt'] = obSub.get('createdAt', '')
+        try:
+          observationSubQuestionsObj['createdBy'] = obSub['createdBy']
+        except KeyError:
+          observationSubQuestionsObj['createdBy'] = ''
+        observationSubQuestionsObj['entity'] = str(obSub['entityId'])
+        observationSubQuestionsObj['entityExternalId'] = obSub['entityExternalId']
+        observationSubQuestionsObj['entityType'] =obSub['entityType']
+        observationSubQuestionsObj["solutionId"] = obSub["solutionId"],
+        observationSubQuestionsObj["solutionExternalId"] = obSub["solutionExternalId"]
+        try : 
+          if 'solutionInfo' in obSub.keys():
+            solutionObj = obSub['solutionInfo']
+            observationSubQuestionsObj['solutionName'] = str(solutionObj.get('name',''))
+        except KeyError:
+          observationSubQuestionsObj['solutionName'] = ''
+        try:
+          if obSub["isRubricDriven"] == True and obSub["criteriaLevelReport"] == True:
+            observationSubQuestionsObj['solutionType'] = "observation_with_rubric"
+          elif obSub["isRubricDriven"] == True and obSub["criteriaLevelReport"] == False:
+            observationSubQuestionsObj['solutionType'] = "observation_with_rubric_no_criteria_level_report"
+          else:
+            observationSubQuestionsObj['solutionType'] = "observation_with_out_rubric"
+        except KeyError:
           observationSubQuestionsObj['solutionType'] = "observation_with_out_rubric"
-      except KeyError:
-        observationSubQuestionsObj['solutionType'] = "observation_with_out_rubric"
 
-      try:
-        observationSubQuestionsObj['completedDate'] = obSub['completedDate']
-      except KeyError:
-          observationSubQuestionsObj['completedDate'] = obSub['createdAt']
-      # Check if 'isAPrivateProgram' key exists
-      try:
-          observationSubQuestionsObj['isAPrivateProgram'] = obSub['isAPrivateProgram']
-      except KeyError:
-          observationSubQuestionsObj['isAPrivateProgram'] = True
-      # user profile creation
-      flatten_userprofile = flatten_json(obSub['userProfile'])
-      new_dict = {}
-      for key in flatten_userprofile:
-          string_without_integer = re.sub(r'\d+', '', key)
-          updated_string = string_without_integer.replace("--", "-")
-          # Check if the value associated with the key is not None
-          if flatten_userprofile[key] is not None:
-              if updated_string in new_dict:
-                  # Perform addition only if both values are not None
-                  if new_dict[updated_string] is not None:
-                      new_dict[updated_string] += "," + str(flatten_userprofile[key])
-                  else:
-                      new_dict[updated_string] = str(flatten_userprofile[key])
-              else:
-                  new_dict[updated_string] = str(flatten_userprofile[key])
+        try:
+          observationSubQuestionsObj['completedDate'] = obSub['completedDate']
+        except KeyError:
+            observationSubQuestionsObj['completedDate'] = obSub['createdAt']
+        # Check if 'isAPrivateProgram' key exists
+        try:
+            observationSubQuestionsObj['isAPrivateProgram'] = obSub['isAPrivateProgram']
+        except KeyError:
+            observationSubQuestionsObj['isAPrivateProgram'] = True
+        # user profile creation
+        # flatten_userprofile = flatten_json(obSub['userProfile'])
+        # new_dict = {}
+        # for key in flatten_userprofile:
+        #     string_without_integer = re.sub(r'\d+', '', key)
+        #     updated_string = string_without_integer.replace("--", "-")
+        #     # Check if the value associated with the key is not None
+        #     if flatten_userprofile[key] is not None:
+        #         if updated_string in new_dict:
+        #             # Perform addition only if both values are not None
+        #             if new_dict[updated_string] is not None:
+        #                 new_dict[updated_string] += "," + str(flatten_userprofile[key])
+        #             else:
+        #                 new_dict[updated_string] = str(flatten_userprofile[key])
+        #         else:
+        #             new_dict[updated_string] = str(flatten_userprofile[key])
 
-      observationSubQuestionsObj['userProfile'] = str(new_dict)
+        # observationSubQuestionsObj['userProfile'] = str(new_dict)
 
-      # Before attempting to access the list, check if it is non-empty
-      profile_user_types = obSub.get('userProfile', {}).get('profileUserTypes', [])
-      if profile_user_types:
-          # Access the first element of the list if it exists
-          user_type = profile_user_types[0].get('type', None)
+        # Before attempting to access the list, check if it is non-empty
+        profile_user_types = obSub.get('userProfile', {}).get('profileUserTypes', [])
+        if profile_user_types:
+            # Access the first element of the list if it exists
+            user_type = profile_user_types[0].get('type', None)
+        else:
+            # Handle the case when the list is empty
+            user_type = None
+        observationSubQuestionsObj['userType'] = user_type
+
+        observationSubQuestionsObj['solutionExternalId'] = obSub.get('solutionExternalId', '')
+        observationSubQuestionsObj['solutionId'] = obSub.get('solutionId', '')
+
+        for location in obSub.get('userProfile', {}).get('userLocations', []):
+            name = location.get('name')
+            type_ = location.get('type')
+            if name and type_:
+                observationSubQuestionsObj[type_] = name
+        
+
+        orgArr = orgName(obSub.get('userProfile', {}).get('organisations',None))
+        if orgArr:
+            # observationSubQuestionsObj['schoolId'] = orgArr[0].get("organisation_id")
+            observationSubQuestionsObj['organisationName'] = orgArr[0].get("orgName")
+        else:
+            # observationSubQuestionsObj['schoolId'] = None
+            observationSubQuestionsObj['organisationName'] = None
+        
+        # Insert data to sl-observation-meta druid datasource if status is anything 
+        producer.send((config.get("KAFKA", "observation_meta_druid_topic")), json.dumps(observationSubQuestionsObj).encode('utf-8'))  
+        producer.flush()
+        observationSubCollec.update_one(
+                    {"_id": ObjectId(observationSubmissionId)},
+                    {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
+                )
+        infoLogger.info("Updated the Mongo observation submission collection after inserting data into sl-observation-meta datasource")
+        infoLogger.info(f"Data with submission_id {observationSubmissionId} is being inserted into the sl-observation-meta datasource.")
       else:
-          # Handle the case when the list is empty
-          user_type = None
-      observationSubQuestionsObj['userType'] = user_type
-
-      observationSubQuestionsObj['solutionExternalId'] = obSub.get('solutionExternalId', '')
-      observationSubQuestionsObj['solutionId'] = obSub.get('solutionId', '')
-
-      for location in obSub.get('userProfile', {}).get('userLocations', []):
-          name = location.get('name')
-          type_ = location.get('type')
-          if name and type_:
-              observationSubQuestionsObj[type_] = name
-      
-
-      orgArr = orgName(obSub.get('userProfile', {}).get('organisations',None))
-      if orgArr:
-          # observationSubQuestionsObj['schoolId'] = orgArr[0].get("organisation_id")
-          observationSubQuestionsObj['organisationName'] = orgArr[0].get("orgName")
-      else:
-          # observationSubQuestionsObj['schoolId'] = None
-          observationSubQuestionsObj['organisationName'] = None
-      
-      # Insert data to sl-observation-meta druid datasource if status is anything 
-      _id = observationSubQuestionsObj.get('observationSubmissionId', None)
-      try:
-          if _id:
-                if check_observation_submission_id_existance(_id,"observationSubmissionId","sl-observation-meta"):
-                    infoLogger.info(f"No data duplection for the Submission ID : {_id} in sl-observation-meta datasource")
-                    # Upload observation submission data to Druid topic
-                    producer.send((config.get("KAFKA", "observation_meta_druid_topic")), json.dumps(observationSubQuestionsObj).encode('utf-8'))  
-                    producer.flush()
-                    infoLogger.info(f"Data with submission_id {_id} is being inserted into the sl-observation-meta datasource.")
-                else:
-                    infoLogger.info(f"Data with submission_id {_id} is already exists in the sl-observation-meta datasource.")
-      except Exception as e :
-          # Log any errors that occur during data ingestion
-          errorLogger.error("====== An error was found during data ingestion in the sl-observation-meta datasource ======")
-          errorLogger.error(e,exc_info=True)
+        infoLogger.info(f"Data with submission_id {observationSubmissionId} is already exists in the sl-observation-meta datasource.")
 
 
       # Insert data to sl-observation-status-started druid datasource if status is started
       if obSub['status'] == 'started':
+        submission_exits_in_started = check_observation_submission_id_existance(observationSubmissionId,"observationSubmissionId","sl-observation-status-started")
+        if submission_exits_in_started == False:
+          infoLogger.info(f"No data duplection for the Submission ID : {observationSubmissionId} in sl-observation-status-started ")  
+          observation_status = {}
           observation_status['observationSubmissionId'] = obSub['_id']
           try:
             observation_status['startedAt'] = obSub['createdAt']
           except KeyError:
             observation_status['startedAt'] = ''
-          _id = observation_status.get('observationSubmissionId', None) 
-          try : 
-              if _id:
-                  if check_observation_submission_id_existance(_id,"observationSubmissionId","sl-observation-status-started"):
-                      infoLogger.info(f"No data duplection for the Submission ID : {_id} in sl-observation-status-started datasource")
-                      # Upload observation status data to Druid topic
-                      producer.send((config.get("KAFKA", "observation_started_druid_topic")), json.dumps(observation_status).encode('utf-8'))
-                      producer.flush()
-                      infoLogger.info(f"Data with submission_id {_id} is being inserted into the sl-observation-status-started datasource.")
-                  else:       
-                      infoLogger.info(f"Data with submission_id {_id} is already exists in the sl-observation-status-started datasource.")
-          except Exception as e :
-              # Log any errors that occur during data ingestion
-              errorLogger.error("====== An error was found during data ingestion in the sl-observation-status-started datasource ======")
-              errorLogger.error(e,exc_info=True)  
+          producer.send((config.get("KAFKA", "observation_started_druid_topic")), json.dumps(observation_status).encode('utf-8'))
+          producer.flush()
+          observationSubCollec.update_one(
+                    {"_id": ObjectId(observationSubmissionId)},
+                    {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
+                )
+          infoLogger.info("Updated the Mongo observation submission collection after inserting data into sl-observation-status-started datasource")
+          infoLogger.info(f"Data with submission_id {observationSubmissionId} is being inserted into the sl-observation-status-started datasource.")
+        else:       
+          infoLogger.info(f"Data with submission_id {observationSubmissionId} is already exists in the sl-observation-status-started datasource.") 
 
-      
       # Insert data to sl-observation-status-started druid datasource if status is inprogress
       elif obSub['status'] == 'inprogress':
+        submission_exits_in_inprogress = check_observation_submission_id_existance(observationSubmissionId,"observationSubmissionId","sl-observation-status-inprogress")
+        if submission_exits_in_inprogress == False:
+          infoLogger.info(f"No data duplection for the Submission ID : {observationSubmissionId} in sl-observation-status-inprogress ")  
+          observation_status = {}
           observation_status['observationSubmissionId'] = obSub['_id']
           observation_status['inprogressAt'] = obSub['updatedAt']
-          _id = observation_status.get('observationSubmissionId', None) 
-          try : 
-              if _id:
-                  if check_observation_submission_id_existance(_id,"observationSubmissionId","sl-observation-status-inprogress"):
-                      infoLogger.info(f"No data duplection for the Submission ID : {_id} in sl-observation-status-inprogress datasource")
-                      # Upload observation status data to Druid topic
-                      producer.send((config.get("KAFKA", "observation_inprogress_druid_topic")), json.dumps(observation_status).encode('utf-8'))
-                      producer.flush()
-                      infoLogger.info(f"Data with submission_id {_id} is being inserted into the sl-observation-status-inprogress datasource.")
-                  else:       
-                      infoLogger.info(f"Data with submission_id {_id} is already exists in the sl-observation-status-inprogress datasource.")
-          except Exception as e :
-              # Log any errors that occur during data ingestion
-              errorLogger.error("====== An error was found during data ingestion in the sl-observation-status-inprogress datasource ======")
-              errorLogger.error(e,exc_info=True)  
-
+          producer.send((config.get("KAFKA", "observation_inprogress_druid_topic")), json.dumps(observation_status).encode('utf-8'))
+          producer.flush()
+          observationSubCollec.update_one(
+                    {"_id": ObjectId(observationSubmissionId)},
+                    {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
+                )
+          infoLogger.info("Updated the Mongo observation submission collection after inserting data into sl-observation-status-inprogress datasource")
+          infoLogger.info(f"Data with submission_id {observationSubmissionId} is being inserted into the sl-observation-status-inprogress datasource.")
+        else:       
+          infoLogger.info(f"Data with submission_id {observationSubmissionId} is already exists in the sl-observation-status-inprogress datasource.")
 
       elif obSub['status'] == 'completed':
+        submission_exits_in_completed = check_observation_submission_id_existance(observationSubmissionId,"observationSubmissionId","sl-observation-status-completed")
+        if submission_exits_in_completed == False:
+          infoLogger.info(f"No data duplection for the Submission ID : {observationSubmissionId} in sl-observation-status-completed")  
           observation_status['observationSubmissionId'] = obSub['_id']
           observation_status['completedAt'] = obSub['completedDate']
-          _id = observation_status.get('observationSubmissionId', None) 
-          try : 
-              if _id:
-                  if check_observation_submission_id_existance(_id,"observationSubmissionId","sl-observation-status-completed"):
-                      infoLogger.info(f"No data duplection for the Submission ID : {_id} in sl-observation-status-completed datasource")
-                      # Upload observation status data to Druid topic
-                      producer.send((config.get("KAFKA", "observation_completed_druid_topic")), json.dumps(observation_status).encode('utf-8'))
-                      producer.flush()
-                      infoLogger.info(f"Data with submission_id {_id} is being inserted into the sl-observation-status-completed datasource")
-                  else:       
-                      infoLogger.info(f"Data with submission_id {_id} is already exists in the sl-observation-status-completed datasource")
-          except Exception as e :
-              # Log any errors that occur during data ingestion
-              errorLogger.error("====== An error was found during data ingestion in the sl-observation-status-inprogress datasource ======")
-              errorLogger.error(e,exc_info=True)  
+          producer.send((config.get("KAFKA", "observation_completed_druid_topic")), json.dumps(observation_status).encode('utf-8'))
+          producer.flush()
+          observationSubCollec.update_one(
+                    {"_id": ObjectId(observationSubmissionId)},
+                    {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
+                )
+          infoLogger.info("Updated the Mongo observation submission collection after inserting data into sl-observation-status-completed datasource")
+          infoLogger.info(f"Data with submission_id {observationSubmissionId} is being inserted into the sl-observation-status-completed datasource")
+        else:       
+          infoLogger.info(f"Data with submission_id {observationSubmissionId} is already exists in the sl-observation-status-completed datasource")
 
       infoLogger.info(f"Completed processing kafka event for the observation Submission Id : {obSub['_id']}. For observation Status report")
     except Exception as e:
@@ -1075,50 +1047,16 @@ except Exception as e:
 
     
 try:
-    @app.agent(rawTopicName)
-    async def surveyFaust(consumer):
-        '''Faust agent to consume messages from Kafka and process them'''
-        async for msg in consumer:
-            try:
-              msg_val = msg.decode('utf-8')
-              msg_data = json.loads(msg_val)
-              infoLogger.info("========== START OF OBSERVATION SUBMISSION EVENT PROCESSING ==========")
-              druid_urls = {
-                    'Coordinator':    config.get('DRUID','coordinator_url'),
-                    'Overlord':       config.get('DRUID','overload_url'),
-                    'Historical':     config.get('DRUID','historical_url')
-                }
-
-              health_status = check_all_druid_services_health(druid_urls)
-              health_status_count = 0
-              for service, status in health_status.items():
-                  if status['is_running']:
-                      infoLogger.info(f"{service} is running.")
-                      health_status_count = health_status_count + 1
-                  else:
-                      infoLogger.info(f"{service} is not running. Status code: {status['status_code']}")
-              if health_status_count == 3 :
-                  infoLogger.info("ALL SERVICES ARE WORKING IN DRUID")
-                  obj_creation(msg_data)
-                  main_data_extraction(msg_data)
-              else :
-                  pass
-                  infoLogger.info("DRUID IS DOWN")
-                  
-              try : 
-                observationSubCollec.update_one(
-                {"_id": ObjectId(msg_data['_id'])},
-                {"$push": {
-                    "datapipeline": {"processed_date": datetime.datetime.now(), "status": msg_data['status']}       
-                }}
-                )
-                infoLogger.info("Updated the Mongo observation submission collection")
-              except KeyError as ke :
-                  errorLogger.error(f"KeyError occurred: {ke}")    
-              infoLogger.info("********** END OF OBSERVATION SUBMISSION EVENT PROCESSING **********")
-            except KeyError as ke:
-                # Log KeyError
-                errorLogger.error(f"KeyError occurred: {ke}")
+  @app.agent(rawTopicName)
+  async def surveyFaust(consumer):
+    '''Faust agent to consume messages from Kafka and process them'''
+    async for msg in consumer:
+      msg_val = msg.decode('utf-8')
+      msg_data = json.loads(msg_val)
+      infoLogger.info(f"========== START OF OBSERVATION SUBMISSION EVENT PROCESSING - {datetime.datetime.now()} ==========")
+      obj_creation(msg_data)
+      main_data_extraction(msg_data)
+      infoLogger.info(f"********** END OF OBSERVATION SUBMISSION EVENT PROCESSING - {datetime.datetime.now()}**********")
 except Exception as e:
     # Log any other exceptions
     errorLogger.error(f"Error in observationFaust function: {e}")
