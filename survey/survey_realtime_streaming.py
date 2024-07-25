@@ -217,7 +217,8 @@ class FinalWorker:
         self.creatingObj = createObj
 
     def run(self):
-        if len(self.orgArr) > 0:
+
+        if len(self.orgArr) >0:
             for org in range(len(self.orgArr)):
                 finalObj = {}
                 finalObj =  self.creatingObj(self.answer,self.quesexternalId,self.ans_val,self.instNum,self.responseLabel)
@@ -227,11 +228,6 @@ class FinalWorker:
                 producer.send((config.get("KAFKA", "survey_druid_topic")), json.dumps(finalObj).encode('utf-8'))
                 producer.flush()
                 infoLogger.info(f"Data for surveyId ({survey_id}) and questionId ({question_id}) inserted into sl-survey datasource")
-            surveySubCollec.update_one(
-                            {"_id": ObjectId(self.subId)},
-                            {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
-                        )
-            infoLogger.info("Updated the Mongo survey submission collection after inserting data to sl-survey datasource") 
         else:
             finalObj = {}
             finalObj =  self.creatingObj(self.answer,self.quesexternalId,self.ans_val,self.instNum,self.responseLabel)
@@ -240,11 +236,7 @@ class FinalWorker:
             producer.send((config.get("KAFKA", "survey_druid_topic")), json.dumps(finalObj).encode('utf-8'))
             producer.flush()
             infoLogger.info(f"Data for surveyId ({survey_id}) and questionId ({question_id}) inserted into sl-survey datasource")
-            surveySubCollec.update_one(
-                            {"_id": ObjectId(self.subId)},
-                            {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
-                        )
-            infoLogger.info("Updated the Mongo survey submission collection after inserting data to sl-survey datasource") 
+        
 
 
 def obj_creation(obSub):
@@ -450,7 +442,7 @@ def obj_creation(obSub):
                                 return surveySubQuestionsObj
 
                             # Function to fetch question details
-                            def fetchingQuestiondetails(ansFn,instNumber):        
+                            def fetchingQuestiondetails(ansFn,instNumber,sub_id):        
                                 try:
                                     # if (len(ansFn['options']) == 0) or (('options' in ansFn.keys()) == False):
                                     if (len(ansFn['options']) == 0) or (('options' not in ansFn.keys())):
@@ -458,8 +450,8 @@ def obj_creation(obSub):
                                             orgArr = orgCreator(obSub["userProfile"]["organisations"])
                                             final_worker = FinalWorker(ansFn,ansFn['externalId'], ansFn['value'], instNumber, ansFn['value'], orgArr, creatingObj)
                                             final_worker.run()
-                                        except KeyError :
-                                            pass 
+                                        except Exception as e :
+                                            errorLogger.error(e, exc_info=True)
                                     else:
                                         labelIndex = 0
                                         for quesOpt in ansFn['options']:
@@ -468,7 +460,7 @@ def obj_creation(obSub):
                                                     if quesOpt['value'] == ansFn['value'] :
                                                         orgArr = orgCreator(obSub["userProfile"]["organisations"])
                                                         final_worker = FinalWorker(ansFn,ansFn['externalId'], ansFn['value'], instNumber, quesOpt['label'], orgArr, creatingObj)
-                                                        final_worker.run()
+                                                        final_worker.run()     
                                                 elif type(ansFn['value']) == list:
                                                     for ansArr in ansFn['value']:
                                                         if quesOpt['value'] == ansArr:
@@ -487,13 +479,20 @@ def obj_creation(obSub):
                                 ans['responseType'] == 'number' or ans['responseType'] == 'date'
                             ):   
                                 inst_cnt = ''
-                                fetchingQuestiondetails(ans, inst_cnt)
+                                fetchingQuestiondetails(ans, inst_cnt,obSub['_id'])
+
                             elif ans['responseType'] == 'matrix' and len(ans['value']) > 0:
                                 inst_cnt =0
                                 for instances in ans['value']:
                                     inst_cnt = inst_cnt + 1
                                     for instance in instances.values():
-                                        fetchingQuestiondetails(instance,inst_cnt)             
+                                        fetchingQuestiondetails(instance,inst_cnt,obSub['_id'])    
+
+                        surveySubCollec.update_one(
+                                    {"_id": ObjectId(obSub['_id'])},
+                                    {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
+                                    )
+                        infoLogger.info("Updated the Mongo survey submission collection after inserting data to sl-survey datasource")         
             else:
                 infoLogger.info(f"survey_Submission_id {surveySubmissionId} is already exists in the sl-survey datasource.")        
         else:                        
@@ -626,12 +625,12 @@ def main_data_extraction(obSub):
                 survey_status['inprogressAt'] = obSub['updatedAt']
                 producer.send((config.get("KAFKA", "survey_inprogress_druid_topic")), json.dumps(survey_status).encode('utf-8'))
                 producer.flush()
+                infoLogger.info(f"Data with submission_id {surveySubmissionId} is being inserted into the sl-survey-status-inprogress datasource.")
                 surveySubCollec.update_one(
                         {"_id": ObjectId(surveySubmissionId)},
                         {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
                     )
-                infoLogger.info("Updated the Mongo survey submission collection after inserting data to sl-survey-status-inprogress datasource") 
-                infoLogger.info(f"Data with submission_id {surveySubmissionId} is being inserted into the sl-survey-status-inprogress datasource.")
+                infoLogger.info("Updated the Mongo survey submission collection after inserting data to sl-survey-status-inprogress datasource")
             else:
                 infoLogger.info(f"Data with submission_id {surveySubmissionId} is already exists in the sl-survey-status-inprogress datasource.")
 
@@ -646,12 +645,12 @@ def main_data_extraction(obSub):
                 _id = survey_status.get('surveySubmissionId', None) 
                 producer.send((config.get("KAFKA", "survey_completed_druid_topic")), json.dumps(survey_status).encode('utf-8'))
                 producer.flush()
+                infoLogger.info(f"Data with submission_id {surveySubmissionId} is being inserted into the sl-survey-status-completed datasource")
                 surveySubCollec.update_one(
                             {"_id": ObjectId(surveySubmissionId)},
                             {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
                         )
                 infoLogger.info("Updated the Mongo survey submission collection after inserting data to sl-survey-status-completed datasource") 
-                infoLogger.info(f"Data with submission_id {surveySubmissionId} is being inserted into the sl-survey-status-completed datasource")
             else:
                 infoLogger.info(f"Data with submission_id {surveySubmissionId} is already exists in the sl-survey-status-completed datasource")
 
