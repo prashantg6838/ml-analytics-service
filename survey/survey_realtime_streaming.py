@@ -183,7 +183,7 @@ def check_survey_submission_id_existance(key,column_name,table_name):
                 return True
         else:
             # Since the table doesn't exist, return True to allow data insertion initially 
-            return False             
+            infoLogger.info(f"{table_name} datsource is not found ")            
     except Exception as e:
         # Log any errors that occur during Druid query execution
         errorLogger.error(e,exc_info=True)
