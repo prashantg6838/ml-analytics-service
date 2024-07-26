@@ -135,20 +135,20 @@ def check_observation_submission_id_existance(observationId,column_name,table_na
     # Log any errors that occur during Druid query execution
     errorLogger.error(e,exc_info=True)
    
-def check_datasource_existence(datasource_name):
-  try : 
-    host = config.get('DRUID', 'datasource_url')
-    response = requests.get(host)
-    if response.status_code == 200:
-      datasources = response.json()
-      if datasource_name in datasources : 
-        return True
-      else : 
-        return False
-    else :
-        return False
-  except requests.RequestException as e:
-      errorLogger.error(f"Error fetching datasources: {e}")
+def send_message(topic, message):
+    success_flag = False
+    try:
+        # Send the message
+        producer.send(topic, json.dumps(message).encode('utf-8'))
+        # If no exception, message was sent successfully
+        success_flag = True
+        infoLogger.info(f"Data for observationId ({message['observationId']}) and questionId ({message['questionId']}) inserted into sl-observation datasource")
+    except Exception as e:
+        # If exception, message send failed
+        success_flag = False
+        errorLogger.error(e,exc_info=True)
+    
+    return success_flag
 
 def orgName(val):
   orgarr = []
@@ -693,10 +693,6 @@ try:
                                   json.dumps(finalObj).encode('utf-8')
                                 )
                                 producer.flush()
-                                observationSubCollec.update_one(
-                                  {"_id": ObjectId(finalObj['observationSubmissionId'])},
-                                  {"$set": {"datapipeline.processed_date": datetime.datetime.now()}})
-                                infoLogger.info("Updated the Mongo observation submission collection after inserting data into sl-observation datasource")
                                 infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) inserted into sl-observation datasource")
                           else :
                             finalObj = {}
@@ -713,11 +709,7 @@ try:
                                 json.dumps(finalObj).encode('utf-8')
                               )
                               producer.flush()
-                              infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) inserted into sl-observation datasource")
-                              observationSubCollec.update_one(
-                                  {"_id": ObjectId(finalObj['observationSubmissionId'])},
-                                  {"$set": {"datapipeline.processed_date": datetime.datetime.now()}})
-                              infoLogger.info("Updated the Mongo observation submission collection after inserting data into sl-observation datasource")
+                              infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) inserted into sl-observation datasource")                             
                       except KeyError:
                         pass
                     else:
@@ -744,10 +736,7 @@ try:
                                     )
                                     producer.flush()
                                     infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) inserted into sl-observation datasource")
-                                    observationSubCollec.update_one(
-                                    {"_id": ObjectId(finalObj['observationSubmissionId'])},
-                                    {"$set": {"datapipeline.processed_date": datetime.datetime.now()}})
-                                    infoLogger.info("Updated the Mongo observation submission collection after inserting data into sl-observation datasource")
+                                    
                               else :
                                 finalObj = {}
                                 finalObj =  creatingObj(
@@ -764,11 +753,7 @@ try:
                                   )
                                   producer.flush()
                                   infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) inserted into sl-observation datasource")
-                                  observationSubCollec.update_one(
-                                  {"_id": ObjectId(finalObj['observationSubmissionId'])},
-                                  {"$set": {"datapipeline.processed_date": datetime.datetime.now()}})
-                                  infoLogger.info("Updated the Mongo observation submission collection after inserting data into sl-observation datasource")
-                              
+                                  
                           elif type(ansFn['value']) == list:
                             for ansArr in ansFn['value']:
                               if quesOpt['value'] == ansArr:
@@ -790,10 +775,7 @@ try:
                                       )
                                       producer.flush()
                                       infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) inserted into sl-observation datasource")
-                                      observationSubCollec.update_one(
-                                      {"_id": ObjectId(finalObj['observationSubmissionId'])},
-                                      {"$set": {"datapipeline.processed_date": datetime.datetime.now()}})
-                                      infoLogger.info("Updated the Mongo observation submission collection after inserting data into sl-observation datasource")
+                      
                                 else :
                                   finalObj = {}
                                   finalObj =  creatingObj(
@@ -811,10 +793,6 @@ try:
                                     )
                                     producer.flush()
                                     infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) inserted into sl-observation datasource")
-                                    observationSubCollec.update_one(
-                                    {"_id": ObjectId(finalObj['observationSubmissionId'])},
-                                    {"$set": {"datapipeline.processed_date": datetime.datetime.now()}})
-                                    infoLogger.info("Updated the Mongo observation submission collection after inserting data into sl-observation datasource")
                                 labelIndex = labelIndex + 1
                         except KeyError:
                           pass
@@ -834,9 +812,13 @@ try:
                           fetchingQuestiondetails(instance, inst_cnt)
                       else :
                         for instance in instances.values():
-                          fetchingQuestiondetails(instance, inst_cnt)
+                          fetchingQuestiondetails(instance, inst_cnt)                   
                 except KeyError:
-                  pass    
+                  pass   
+        observationSubCollec.update_one(
+        {"_id": ObjectId(obSub['_id'])},
+        {"$set": {"datapipeline.processed_date": datetime.datetime.now()}})
+        infoLogger.info("Updated the Mongo observation submission collection after inserting data into sl-observation datasource")         
       else:
         infoLogger.info(f"observation_Submission_id {observationSubmissionId} is already exists in the sl-observation datasource.") 
     else:
