@@ -119,23 +119,18 @@ def check_observation_submission_id_existance(observationId,column_name,table_na
 
     conn = connect(host=host, port=port, path=path, scheme=scheme)
     cur = conn.cursor()
-    response = check_datasource_existence(table_name)
-    if response == True:
-        # Query to check existence of observation submission Id in Druid table
-        query = f"SELECT COUNT(*) FROM \"{table_name}\" WHERE \"{column_name}\" = '{observationId}'"
-        cur.execute(query)
-        result = cur.fetchone()
-        count = result[0]
-        infoLogger.info(f"Found {count} entires in {table_name}")
-        # if count == 0 means observation_submission_id not exits in the datasource
-        # if count > 0 means observation_submission_id exits in datasource 
-        if count == 0:
-            return False
-        else:
-            return True
+    # Query to check existence of observation submission Id in Druid table
+    query = f"SELECT COUNT(*) FROM \"{table_name}\" WHERE \"{column_name}\" = '{observationId}'"
+    cur.execute(query)
+    result = cur.fetchone()
+    count = result[0]
+    infoLogger.info(f"Found {count} entires in {table_name}")
+    # if count == 0 means observation_submission_id not exits in the datasource
+    # if count > 0 means observation_submission_id exits in datasource 
+    if count == 0:
+        return False
     else:
-        # Since the table doesn't exist, return True to allow data insertion initially 
-        return False            
+        return True 
   except Exception as e:
     # Log any errors that occur during Druid query execution
     errorLogger.error(e,exc_info=True)
@@ -217,15 +212,15 @@ try:
       return arr
 except Exception as e:
   errorLogger.error(e, exc_info=True)
-
+                 
 try:
   def obj_creation(obSub):
     # Debug log for survey submission ID
     infoLogger.info(f"Started to process kafka event for the observation Submission Id : {obSub['_id']}. For Observation Question report")
     if obSub['status'] == 'completed': 
-      observationSubmissionId =  str(obSub['_id'])
-      submission_exits = check_observation_submission_id_existance(observationSubmissionId,"observationSubmissionId","sl-observation")
-      if submission_exits == False:
+      observationSubmissionId =  str(obSub['_id'])  
+      submission_id_exits = check_observation_submission_id_existance(observationSubmissionId,"observationSubmissionId","sl-observation")
+      if submission_id_exits == False:
         infoLogger.info(f"No data duplection for the Submission ID : {observationSubmissionId} in sl-observation ")  
         if 'isAPrivateProgram' in obSub :
           completedDate = None
@@ -677,23 +672,6 @@ try:
                   except KeyError :
                     observationSubQuestionsObj["isRubricDriven"] = False
 
-                  # flatten_userprofile = flatten_json(obSub['userProfile'])
-                  # new_dict = {}
-                  # for key in flatten_userprofile:
-                  #   string_without_integer = re.sub(r'\d+', '', key)
-                  #   updated_string = string_without_integer.replace("--", "-")
-                  #   # Check if the value associated with the key is not None
-                  #   if flatten_userprofile[key] is not None:
-                  #       if updated_string in new_dict:
-                  #           # Perform addition only if both values are not None
-                  #           if new_dict[updated_string] is not None:
-                  #               new_dict[updated_string] += "," + str(flatten_userprofile[key])
-                  #           else:
-                  #               new_dict[updated_string] = str(flatten_userprofile[key])
-                  #       else:
-                  #           new_dict[updated_string] = str(flatten_userprofile[key])
-
-                  # observationSubQuestionsObj['userProfile'] = str(new_dict)
                   observationSubQuestionsObj['userProfile'] = ''
                   return observationSubQuestionsObj
 
@@ -715,12 +693,11 @@ try:
                                   json.dumps(finalObj).encode('utf-8')
                                 )
                                 producer.flush()
-                                infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) inserted into sl-observation datasource")
                                 observationSubCollec.update_one(
-                                    {"_id": ObjectId(finalObj['observationSubmissionId'])},
-                                    {"$set": {"datapipeline.processed_date": datetime.datetime.now()}})
+                                  {"_id": ObjectId(finalObj['observationSubmissionId'])},
+                                  {"$set": {"datapipeline.processed_date": datetime.datetime.now()}})
                                 infoLogger.info("Updated the Mongo observation submission collection after inserting data into sl-observation datasource")
-                                
+                                infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) inserted into sl-observation datasource")
                           else :
                             finalObj = {}
                             finalObj =  creatingObj(
@@ -738,10 +715,9 @@ try:
                               producer.flush()
                               infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) inserted into sl-observation datasource")
                               observationSubCollec.update_one(
-                                    {"_id": ObjectId(finalObj['observationSubmissionId'])},
-                                    {"$set": {"datapipeline.processed_date": datetime.datetime.now()}})
+                                  {"_id": ObjectId(finalObj['observationSubmissionId'])},
+                                  {"$set": {"datapipeline.processed_date": datetime.datetime.now()}})
                               infoLogger.info("Updated the Mongo observation submission collection after inserting data into sl-observation datasource")
-                              
                       except KeyError:
                         pass
                     else:
@@ -772,7 +748,6 @@ try:
                                     {"_id": ObjectId(finalObj['observationSubmissionId'])},
                                     {"$set": {"datapipeline.processed_date": datetime.datetime.now()}})
                                     infoLogger.info("Updated the Mongo observation submission collection after inserting data into sl-observation datasource")
-                                    
                               else :
                                 finalObj = {}
                                 finalObj =  creatingObj(
@@ -790,10 +765,9 @@ try:
                                   producer.flush()
                                   infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) inserted into sl-observation datasource")
                                   observationSubCollec.update_one(
-                                    {"_id": ObjectId(finalObj['observationSubmissionId'])},
-                                    {"$set": {"datapipeline.processed_date": datetime.datetime.now()}})
+                                  {"_id": ObjectId(finalObj['observationSubmissionId'])},
+                                  {"$set": {"datapipeline.processed_date": datetime.datetime.now()}})
                                   infoLogger.info("Updated the Mongo observation submission collection after inserting data into sl-observation datasource")
-                                 
                               
                           elif type(ansFn['value']) == list:
                             for ansArr in ansFn['value']:
@@ -817,10 +791,9 @@ try:
                                       producer.flush()
                                       infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) inserted into sl-observation datasource")
                                       observationSubCollec.update_one(
-                                            {"_id": ObjectId(finalObj['observationSubmissionId'])},
-                                            {"$set": {"datapipeline.processed_date": datetime.datetime.now()}})
+                                      {"_id": ObjectId(finalObj['observationSubmissionId'])},
+                                      {"$set": {"datapipeline.processed_date": datetime.datetime.now()}})
                                       infoLogger.info("Updated the Mongo observation submission collection after inserting data into sl-observation datasource")
-                                      
                                 else :
                                   finalObj = {}
                                   finalObj =  creatingObj(
@@ -842,7 +815,6 @@ try:
                                     {"_id": ObjectId(finalObj['observationSubmissionId'])},
                                     {"$set": {"datapipeline.processed_date": datetime.datetime.now()}})
                                     infoLogger.info("Updated the Mongo observation submission collection after inserting data into sl-observation datasource")
-
                                 labelIndex = labelIndex + 1
                         except KeyError:
                           pass
@@ -924,25 +896,8 @@ try:
             observationSubQuestionsObj['isAPrivateProgram'] = obSub['isAPrivateProgram']
         except KeyError:
             observationSubQuestionsObj['isAPrivateProgram'] = True
-        # user profile creation
-        # flatten_userprofile = flatten_json(obSub['userProfile'])
-        # new_dict = {}
-        # for key in flatten_userprofile:
-        #     string_without_integer = re.sub(r'\d+', '', key)
-        #     updated_string = string_without_integer.replace("--", "-")
-        #     # Check if the value associated with the key is not None
-        #     if flatten_userprofile[key] is not None:
-        #         if updated_string in new_dict:
-        #             # Perform addition only if both values are not None
-        #             if new_dict[updated_string] is not None:
-        #                 new_dict[updated_string] += "," + str(flatten_userprofile[key])
-        #             else:
-        #                 new_dict[updated_string] = str(flatten_userprofile[key])
-        #         else:
-        #             new_dict[updated_string] = str(flatten_userprofile[key])
 
-        # observationSubQuestionsObj['userProfile'] = str(new_dict)
-
+        observationSubQuestionsObj['userProfile'] = ''
         # Before attempting to access the list, check if it is non-empty
         profile_user_types = obSub.get('userProfile', {}).get('profileUserTypes', [])
         if profile_user_types:
@@ -951,8 +906,8 @@ try:
         else:
             # Handle the case when the list is empty
             user_type = None
-        observationSubQuestionsObj['userType'] = user_type
 
+        observationSubQuestionsObj['userType'] = user_type
         observationSubQuestionsObj['solutionExternalId'] = obSub.get('solutionExternalId', '')
         observationSubQuestionsObj['solutionId'] = obSub.get('solutionId', '')
 
@@ -1018,12 +973,12 @@ try:
           observation_status['inprogressAt'] = obSub['updatedAt']
           producer.send((config.get("KAFKA", "observation_inprogress_druid_topic")), json.dumps(observation_status).encode('utf-8'))
           producer.flush()
+          infoLogger.info(f"Data with submission_id {observationSubmissionId} is being inserted into the sl-observation-status-inprogress datasource.")
           observationSubCollec.update_one(
                     {"_id": ObjectId(observationSubmissionId)},
                     {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
                 )
           infoLogger.info("Updated the Mongo observation submission collection after inserting data into sl-observation-status-inprogress datasource")
-          infoLogger.info(f"Data with submission_id {observationSubmissionId} is being inserted into the sl-observation-status-inprogress datasource.")
         else:       
           infoLogger.info(f"Data with submission_id {observationSubmissionId} is already exists in the sl-observation-status-inprogress datasource.")
 
@@ -1036,15 +991,14 @@ try:
           observation_status['completedAt'] = obSub['completedDate']
           producer.send((config.get("KAFKA", "observation_completed_druid_topic")), json.dumps(observation_status).encode('utf-8'))
           producer.flush()
+          infoLogger.info(f"Data with submission_id {observationSubmissionId} is being inserted into the sl-observation-status-completed datasource")
           observationSubCollec.update_one(
                     {"_id": ObjectId(observationSubmissionId)},
                     {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
                 )
           infoLogger.info("Updated the Mongo observation submission collection after inserting data into sl-observation-status-completed datasource")
-          infoLogger.info(f"Data with submission_id {observationSubmissionId} is being inserted into the sl-observation-status-completed datasource")
         else:       
           infoLogger.info(f"Data with submission_id {observationSubmissionId} is already exists in the sl-observation-status-completed datasource")
-
       infoLogger.info(f"Completed processing kafka event for the observation Submission Id : {obSub['_id']}. For observation Status report")
     except Exception as e:
         # Log any errors that occur during data extraction

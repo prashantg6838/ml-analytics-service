@@ -169,40 +169,20 @@ def check_survey_submission_id_existance(key,column_name,table_name):
 
         conn = connect(host=host, port=port, path=path, scheme=scheme)
         cur = conn.cursor()
-        response = check_datasource_existence(table_name)
-        if response == True:
-            # Query to check existence of survey submission Id in Druid table
-            query = f"SELECT COUNT(*) FROM \"{table_name}\" WHERE \"{column_name}\" = '{key}'"
-            cur.execute(query)
-            result = cur.fetchone()
-            count = result[0]
-            infoLogger.info(f"Found {count} entires in {table_name}")
-            if count == 0:
-                return False
-            else:
-                return True
+        # Query to check existence of survey submission Id in Druid table
+        query = f"SELECT COUNT(*) FROM \"{table_name}\" WHERE \"{column_name}\" = '{key}'"
+        cur.execute(query)
+        result = cur.fetchone()
+        count = result[0]
+        infoLogger.info(f"Found {count} entires in {table_name}")
+        if count == 0:
+            return False
         else:
-            # Since the table doesn't exist, return True to allow data insertion initially 
-            infoLogger.info(f"{table_name} datsource is not found ")            
+            return True        
     except Exception as e:
         # Log any errors that occur during Druid query execution
         errorLogger.error(e,exc_info=True)
    
-def check_datasource_existence(datasource_name):
-    host = config.get('DRUID', 'datasource_url')
-    try : 
-        response = requests.get(host)
-        if response.status_code == 200:
-            datasources = response.json()
-            if datasource_name in datasources : 
-                return True
-            else : 
-                return False
-        else : 
-            return False
-    except requests.RequestException as e:
-        errorLogger.error(e,exc_info=True)
-
 
 # Worker class to send data to Kafka
 class FinalWorker:
@@ -414,27 +394,6 @@ def obj_creation(obSub):
                                 #     surveySubQuestionsObj['instanceParentExternalId'] = ''
                                 #     surveySubQuestionsObj['instanceParentEcmSequence'] = '' 
 
-                                # Extract channel and parent channel
-                                # surveySubQuestionsObj['channel'] = rootOrgId 
-                                # surveySubQuestionsObj['parent_channel'] = "SHIKSHALOKAM"
-                                # user profile creation
-                                # flatten_userprofile = flatten_json(obSub['userProfile'])
-                                # new_dict = {}
-                                # for key in flatten_userprofile:
-                                #     string_without_integer = re.sub(r'\d+', '', key)
-                                #     updated_string = string_without_integer.replace("--", "-")
-                                #     # Check if the value associated with the key is not None
-                                #     if flatten_userprofile[key] is not None:
-                                #         if updated_string in new_dict:
-                                #             # Perform addition only if both values are not None
-                                #             if new_dict[updated_string] is not None:
-                                #                 new_dict[updated_string] += "," + str(flatten_userprofile[key])
-                                #             else:
-                                #                 new_dict[updated_string] = str(flatten_userprofile[key])
-                                #         else:
-                                #             new_dict[updated_string] = str(flatten_userprofile[key])
-
-                                # surveySubQuestionsObj['userProfile'] = str(new_dict)
                                 surveySubQuestionsObj['userProfile'] = ''
                                 # Update object with additional user data
                                 # Commented the bellow line as we don't need userRoleInso in KB
@@ -537,45 +496,10 @@ def main_data_extraction(obSub):
                 surveySubQuestionsObj['isAPrivateProgram'] = obSub['isAPrivateProgram']
             except KeyError:
                 surveySubQuestionsObj['isAPrivateProgram'] = True
-            # user profile creation
-            # flatten_userprofile = flatten_json(obSub['userProfile'])
-            # new_dict = {}
-            # for key in flatten_userprofile:
-            #     string_without_integer = re.sub(r'\d+', '', key)
-            #     updated_string = string_without_integer.replace("--", "-")
-            #     # Check if the value associated with the key is not None
-            #     if flatten_userprofile[key] is not None:
-            #         if updated_string in new_dict:
-            #             # Perform addition only if both values are not None
-            #             if new_dict[updated_string] is not None:
-            #                 new_dict[updated_string] += "," + str(flatten_userprofile[key])
-            #             else:
-            #                 new_dict[updated_string] = str(flatten_userprofile[key])
-            #         else:
-            #             new_dict[updated_string] = str(flatten_userprofile[key])
 
-            # surveySubQuestionsObj['userProfile'] = str(new_dict)
             surveySubQuestionsObj['userProfile'] = ''
-            # Before attempting to access the list, check if it is non-empty
-            # profile_user_types = obSub.get('userProfile', {}).get('profileUserTypes', [])
-            # if profile_user_types:
-            #     # Access the first element of the list if it exists
-            #     user_type = profile_user_types[0].get('type', None)
-            # else:
-            #     # Handle the case when the list is empty
-            #     user_type = None
-            # surveySubQuestionsObj['user_type'] = user_type
-
             surveySubQuestionsObj['solutionExternalId'] = obSub.get('solutionExternalId', '')
             surveySubQuestionsObj['solutionId'] = obSub.get('solutionId', '')
-
-            # for location in obSub.get('userProfile', {}).get('userLocations', []):
-            #     name = location.get('name')
-            #     type_ = location.get('type')
-            #     if name and type_:
-            #         surveySubQuestionsObj[type_] = name
-            
-            # surveySubQuestionsObj['board_name'] = obSub.get('userProfile', {}).get('framework', {}).get('board', [''])[0]
 
             orgArr = orgCreator(obSub.get('userProfile', {}).get('organisations',None))
             if orgArr:
