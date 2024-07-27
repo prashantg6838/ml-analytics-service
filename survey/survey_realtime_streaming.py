@@ -150,9 +150,37 @@ def orgCreator(val):
             orgObj = {}
             if org["isSchool"] == False:
                 orgObj['organisationId'] = org['organisationId']
-                orgObj['organisationName'] = ''
+                orgObj['organisationName'] = org["orgName"]
                 orgarr.append(orgObj)
     return orgarr
+
+def flatten_json(y):
+    out = {}
+
+    def flatten(x, name=''):
+        # If the Nested key-value pair is of dict type
+        if isinstance(x, dict):
+            for a in x:
+                flatten(x[a], name + a + '-')
+
+        # If the Nested key-value pair is of list type
+        elif isinstance(x, list):
+            if not x:  # Check if the list is empty
+                out[name[:-1]] = "null"
+            else:
+                for i, a in enumerate(x):
+                    flatten(a, name + str(i) + '-')
+
+        # If the Nested key-value pair is of other types
+        else:
+            # Replace None, empty string, or empty list with "null"
+            if x is None or x == '' or x == []:
+                out[name[:-1]] = "null"
+            else:
+                out[name[:-1]] = x
+
+    flatten(y)
+    return out
 
 # # Define function to check if survey submission Id exists in Druid
 def check_survey_submission_id_existance(key,column_name,table_name):
@@ -180,11 +208,22 @@ def check_survey_submission_id_existance(key,column_name,table_name):
         else:
             return True        
     except Exception as e:
+        infoLogger.info(f"Failed to check the {table_name} datasource")
         # Log any errors that occur during Druid query execution
-        errorLogger.error(e,exc_info=True)
-   
+        errorLogger.error(f"Failed to check the {table_name} datasource {e}",exc_info=True)
+
+def set_null_value(data):
+    if "userProfile" in data :
+        if config.get("OUTPUT_DIR","CAPTURE_USER_PROFILE") == "True":
+            data['userProfile'] = ''
+    if "organisationName" in data:
+        if config.get("OUTPUT_DIR","CAPTURE_ORGANISATION_NAME") == "True":
+            data['organisationName'] = ''
+    return data
+
 def send_data_to_kafka(data,topic):
-  future = producer.send(topic, json.dumps(data).encode('utf-8'))
+  modified_data = set_null_value(data)
+  future = producer.send(topic, json.dumps(modified_data).encode('utf-8'))
   producer.flush()
   record_metadata = future.get(timeout=10)
   message_id = record_metadata.offset
@@ -391,7 +430,25 @@ def obj_creation(obSub):
                                     surveySubQuestionsObj['evidences'] = ''                                
                                     surveySubQuestionsObj['evidenceCount'] = 0
                                 surveySubQuestionsObj['totalEvidences'] = evidence_sub_count
+                                # user profile creation
+                                flatten_userprofile = flatten_json(obSub['userProfile'])
+                                new_dict = {}
+                                for key in flatten_userprofile:
+                                    string_without_integer = re.sub(r'\d+', '', key)
+                                    updated_string = string_without_integer.replace("--", "-")
+                                    # Check if the value associated with the key is not None
+                                    if flatten_userprofile[key] is not None:
+                                        if updated_string in new_dict:
+                                            # Perform addition only if both values are not None
+                                            if new_dict[updated_string] is not None:
+                                                new_dict[updated_string] += "," + str(flatten_userprofile[key])
+                                            else:
+                                                new_dict[updated_string] = str(flatten_userprofile[key])
+                                        else:
+                                            new_dict[updated_string] = str(flatten_userprofile[key])
 
+                                surveySubQuestionsObj['userProfile'] = str(new_dict)
+                        
                                 # Extract parent question details for matrix response type
                                 # if ans['responseType']=='matrix':
                                 #     surveySubQuestionsObj['instanceParentQuestion'] = ans['question'][0]
@@ -413,7 +470,6 @@ def obj_creation(obSub):
                                 #     surveySubQuestionsObj['instanceParentExternalId'] = ''
                                 #     surveySubQuestionsObj['instanceParentEcmSequence'] = '' 
 
-                                surveySubQuestionsObj['userProfile'] = ''
                                 # Update object with additional user data
                                 # Commented the bellow line as we don't need userRoleInso in KB
                                 # surveySubQuestionsObj.update(userDataCollector(obSub))
@@ -456,7 +512,7 @@ def obj_creation(obSub):
                                                             flag_count_fetch = flag_count_fetch + count
                                             except KeyError:
                                                 pass
-                                        return list_message_id_fetch,flag_count_fetch
+                                    return list_message_id_fetch,flag_count_fetch
                                 except KeyError:
                                     pass
 
@@ -478,14 +534,14 @@ def obj_creation(obSub):
                                     for instance in instances.values():
                                         message_id,flag_count = fetchingQuestiondetails(instance,inst_cnt)    
                                         list_message_id_ext.extend(message_id)
-                                        flag_count_ext = flag_count_ext + flag_count
-                return list_message_id_ext,flag_count_ext        
+                                        flag_count_ext = flag_count_ext + flag_count       
             else:
                 infoLogger.info(f"survey_Submission_id {surveySubmissionId} is already exists in the sl-survey datasource.")        
         else:                        
             infoLogger.info(f"Survey Submission is not in completed status" )
 
-        infoLogger.info(f"Completed processing kafka event for the Survey Submission Id : {obSub['_id']}. For Survey Question report ")              
+        infoLogger.info(f"Completed processing kafka event for the Survey Submission Id : {obSub['_id']}. For Survey Question report ")  
+        return list_message_id_ext,flag_count_ext             
     except Exception as e:
         # Log any errors that occur during processing
         errorLogger.error(e, exc_info=True)
@@ -527,7 +583,24 @@ def main_data_extraction(obSub):
             except KeyError:
                 surveySubQuestionsObj['isAPrivateProgram'] = True
 
-            surveySubQuestionsObj['userProfile'] = ''
+            flatten_userprofile = flatten_json(obSub['userProfile'])
+            new_dict = {}
+            for key in flatten_userprofile:
+                string_without_integer = re.sub(r'\d+', '', key)
+                updated_string = string_without_integer.replace("--", "-")
+                # Check if the value associated with the key is not None
+                if flatten_userprofile[key] is not None:
+                    if updated_string in new_dict:
+                        # Perform addition only if both values are not None
+                        if new_dict[updated_string] is not None:
+                            new_dict[updated_string] += "," + str(flatten_userprofile[key])
+                        else:
+                            new_dict[updated_string] = str(flatten_userprofile[key])
+                    else:
+                        new_dict[updated_string] = str(flatten_userprofile[key])
+
+            surveySubQuestionsObj['userProfile'] = str(new_dict)    
+
             surveySubQuestionsObj['solutionExternalId'] = obSub.get('solutionExternalId', '')
             surveySubQuestionsObj['solutionId'] = obSub.get('solutionId', '')
 
@@ -630,19 +703,21 @@ async def surveyFaust(consumer):
             list_message_id_main , flag_count_main = main_data_extraction(msg_data)
             list_message_id.extend(list_message_id_main)
             flag_count = flag_count + flag_count_main 
-            if len(list_message_id) == flag_count:
-                update_result = surveySubCollec.update_one(
-                    {"_id": ObjectId(msg_data['_id'])},
-                    {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
-                    )
-                if update_result.modified_count == 1:
-                    infoLogger.info("Updated the Mongo survey submission collection after inserting data into to kafka topic")
+            if (len(list_message_id) != 0) and (flag_count != 0):
+                if len(list_message_id) == flag_count:
+                    update_result = surveySubCollec.update_one(
+                        {"_id": ObjectId(msg_data['_id'])},
+                        {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
+                        )
+                    if update_result.modified_count == 1:
+                        infoLogger.info("Updated the Mongo survey submission collection after inserting data into to kafka topic")
+                    else:
+                        infoLogger.info("Failed to update the Mongo survey submission collection (modified_count: {})".format(update_result.modified_count))
                 else:
-                    infoLogger.info("Failed to update the Mongo survey submission collection (modified_count: {})".format(update_result.modified_count))
+                    infoLogger.info("As the number of Kafka message IDs did not align with the number of ingestions, the Mongo survey submission collection was not updated.") 
             else:
-                infoLogger.info("As the number of Kafka message IDs did not align with the number of ingestions, the Mongo survey submission collection was not updated.")     
+                infoLogger.info("Since both Kafka ID count and flag count are zero, the MongoDB observation submission collection will not be updated")    
             infoLogger.info(f"********** END OF SURVEY SUBMISSION EVENT PROCESSING - {datetime.datetime.now()} **********")
-
         except Exception as e:
             # Log KeyError
             errorLogger.error(e,exc_info=True)

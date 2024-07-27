@@ -134,13 +134,51 @@ def check_observation_submission_id_existance(observationId,column_name,table_na
   except Exception as e:
     # Log any errors that occur during Druid query execution
     errorLogger.error(e,exc_info=True)
-   
+
+def set_null_value(data):
+  if "userProfile" in data :
+    if config.get("OUTPUT_DIR","CAPTURE_USER_PROFILE") == "True":
+      data['userProfile'] = ''
+  if "organisationName" in data:
+    if config.get("OUTPUT_DIR","CAPTURE_ORGANISATION_NAME") == "True":
+      data['organisationName'] = ''
+  return data
+
 def send_data_to_kafka(data,topic):
-  future = producer.send(topic, json.dumps(data).encode('utf-8'))
+  modified_data = set_null_value(data)
+  future = producer.send(topic, json.dumps(modified_data).encode('utf-8'))
   producer.flush()
   record_metadata = future.get(timeout=10)
   message_id = record_metadata.offset
   return message_id
+
+def flatten_json(y):
+  out = {}
+
+  def flatten(x, name=''):
+    # If the Nested key-value pair is of dict type
+    if isinstance(x, dict):
+        for a in x:
+            flatten(x[a], name + a + '-')
+
+    # If the Nested key-value pair is of list type
+    elif isinstance(x, list):
+        if not x:  # Check if the list is empty
+            out[name[:-1]] = "null"
+        else:
+            for i, a in enumerate(x):
+                flatten(a, name + str(i) + '-')
+
+    # If the Nested key-value pair is of other types
+    else:
+        # Replace None, empty string, or empty list with "null"
+        if x is None or x == '' or x == []:
+            out[name[:-1]] = "null"
+        else:
+            out[name[:-1]] = x
+
+  flatten(y)
+  return out
 
 def orgName(val):
   orgarr = []
@@ -666,7 +704,23 @@ try:
                   except KeyError :
                     observationSubQuestionsObj["isRubricDriven"] = False
 
-                  observationSubQuestionsObj['userProfile'] = ''
+                  flatten_userprofile = flatten_json(obSub['userProfile'])
+                  new_dict = {}
+                  for key in flatten_userprofile:
+                    string_without_integer = re.sub(r'\d+', '', key)
+                    updated_string = string_without_integer.replace("--", "-")
+                    # Check if the value associated with the key is not None
+                    if flatten_userprofile[key] is not None:
+                        if updated_string in new_dict:
+                            # Perform addition only if both values are not None
+                            if new_dict[updated_string] is not None:
+                                new_dict[updated_string] += "," + str(flatten_userprofile[key])
+                            else:
+                                new_dict[updated_string] = str(flatten_userprofile[key])
+                        else:
+                            new_dict[updated_string] = str(flatten_userprofile[key])
+
+                  observationSubQuestionsObj['userProfile'] = str(new_dict)
                   return observationSubQuestionsObj
 
                 def fetchingQuestiondetails(ansFn, instNumber):  
@@ -795,8 +849,6 @@ try:
                                 labelIndex = labelIndex + 1
                         except KeyError:
                           pass
-                      print(list_message_id)
-                      print(flag_count)
                     return list_message_id,flag_count
                 try:
                   if (
@@ -828,8 +880,6 @@ try:
     else:
       infoLogger.info(f"Observation Submission is not in completed status" )
     infoLogger.info(f"Completed processing kafka event for the Observation Submission Id : {obSub['_id']}. For Observation Question report ") 
-    print(list_message_id_ext)
-    print(flag_count_ext)
     return list_message_id_ext,flag_count_ext                   
 except Exception as e:
   errorLogger.error(e, exc_info=True)
@@ -888,7 +938,23 @@ try:
         except KeyError:
             observationSubQuestionsObj['isAPrivateProgram'] = True
 
-        observationSubQuestionsObj['userProfile'] = ''
+        flatten_userprofile = flatten_json(obSub['userProfile'])
+        new_dict = {}
+        for key in flatten_userprofile:
+            string_without_integer = re.sub(r'\d+', '', key)
+            updated_string = string_without_integer.replace("--", "-")
+            # Check if the value associated with the key is not None
+            if flatten_userprofile[key] is not None:
+                if updated_string in new_dict:
+                    # Perform addition only if both values are not None
+                    if new_dict[updated_string] is not None:
+                        new_dict[updated_string] += "," + str(flatten_userprofile[key])
+                    else:
+                        new_dict[updated_string] = str(flatten_userprofile[key])
+                else:
+                    new_dict[updated_string] = str(flatten_userprofile[key])
+
+        observationSubQuestionsObj['userProfile'] = str(new_dict)
         # Before attempting to access the list, check if it is non-empty
         profile_user_types = obSub.get('userProfile', {}).get('profileUserTypes', [])
         if profile_user_types:
@@ -987,8 +1053,6 @@ try:
     except Exception as e:
         # Log any errors that occur during data extraction
         errorLogger.error(e, exc_info=True)
-    print(list_message_id)
-    print(flag_count)
     return list_message_id,flag_count
 except Exception as e:
     # Log any errors that occur during data extraction
@@ -1012,17 +1076,20 @@ try:
       list_message_id.extend(list_message_id_main)
       flag_count = flag_count + flag_count_main
       #updating the mongo collection
-      if len(list_message_id) == flag_count:
-        update_result = observationSubCollec.update_one(
-            {"_id": ObjectId(msg_data['_id'])},
-            {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
-        )
-        if update_result.modified_count == 1:
-            infoLogger.info("Updated the Mongo observation submission collection after inserting data into kafka topic")
+      if (len(list_message_id) != 0) and (flag_count != 0):
+        if len(list_message_id) == flag_count:
+          update_result = observationSubCollec.update_one(
+              {"_id": ObjectId(msg_data['_id'])},
+              {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
+          )
+          if update_result.modified_count == 1:
+              infoLogger.info("Updated the Mongo observation submission collection after inserting data into kafka topic")
+          else:
+              infoLogger.info("Failed to update the Mongo observation submission collection (modified_count: {})".format(update_result.modified_count))
         else:
-            infoLogger.info("Failed to update the Mongo observation submission collection (modified_count: {})".format(update_result.modified_count))
+          infoLogger.info("As the number of Kafka message IDs did not align with the number of ingestions, the Mongo observation submission collection was not updated.")
       else:
-        infoLogger.info("As the number of Kafka message IDs did not align with the number of ingestions, the Mongo observation submission collection was not updated.")
+        infoLogger.info("Since both Kafka ID count and flag count are zero, the MongoDB observation submission collection will not be updated")
       infoLogger.info(f"********** END OF OBSERVATION SUBMISSION EVENT PROCESSING - {datetime.datetime.now()}**********")
 except Exception as e:
     # Log any other exceptions
