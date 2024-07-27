@@ -183,6 +183,12 @@ def check_survey_submission_id_existance(key,column_name,table_name):
         # Log any errors that occur during Druid query execution
         errorLogger.error(e,exc_info=True)
    
+def send_data_to_kafka(data,topic):
+  future = producer.send(topic, json.dumps(data).encode('utf-8'))
+  producer.flush()
+  record_metadata = future.get(timeout=10)
+  message_id = record_metadata.offset
+  return message_id
 
 # Worker class to send data to Kafka
 class FinalWorker:
@@ -197,7 +203,8 @@ class FinalWorker:
         self.creatingObj = createObj
 
     def run(self):
-
+        list_message_id = []
+        flag_count = 0
         if len(self.orgArr) >0:
             for org in range(len(self.orgArr)):
                 finalObj = {}
@@ -205,17 +212,21 @@ class FinalWorker:
                 finalObj.update(self.orgArr[org])
                 survey_id = finalObj["surveyId"]
                 question_id = finalObj["questionId"]
-                producer.send((config.get("KAFKA", "survey_druid_topic")), json.dumps(finalObj).encode('utf-8'))
-                producer.flush()
+                flag_count += 1
+                message_id  = send_data_to_kafka(finalObj,config.get("KAFKA", "survey_druid_topic"))
+                list_message_id.append(message_id)
                 infoLogger.info(f"Data for surveyId ({survey_id}) and questionId ({question_id}) inserted into sl-survey datasource")
+            return list_message_id,flag_count
         else:
             finalObj = {}
             finalObj =  self.creatingObj(self.answer,self.quesexternalId,self.ans_val,self.instNum,self.responseLabel)
             survey_id = finalObj["surveyId"]
             question_id = finalObj["questionId"]
-            producer.send((config.get("KAFKA", "survey_druid_topic")), json.dumps(finalObj).encode('utf-8'))
-            producer.flush()
+            flag_count += 1
+            message_id = send_data_to_kafka(finalObj,config.get("KAFKA", "survey_druid_topic"))
+            list_message_id.append(message_id)
             infoLogger.info(f"Data for surveyId ({survey_id}) and questionId ({question_id}) inserted into sl-survey datasource")
+            return list_message_id,flag_count
         
 
 
@@ -224,6 +235,8 @@ def obj_creation(obSub):
     try:
         # Debug log for survey submission ID
         infoLogger.info(f"Started to process kafka event for the Survey Submission Id : {obSub['_id']}. For Survey Question report")
+        list_message_id_ext = []
+        flag_count_ext = 0
         if obSub['status'] == 'completed': 
             surveySubmissionId =  str(obSub['_id'])
             submission_exits = check_survey_submission_id_existance(surveySubmissionId,"surveySubmissionId","sl-survey")
@@ -401,16 +414,21 @@ def obj_creation(obSub):
                                 return surveySubQuestionsObj
 
                             # Function to fetch question details
-                            def fetchingQuestiondetails(ansFn,instNumber,sub_id):        
+                            def fetchingQuestiondetails(ansFn,instNumber):        
                                 try:
+                                    list_message_id_fetch = []
+                                    flag_count_fetch = 0
                                     # if (len(ansFn['options']) == 0) or (('options' in ansFn.keys()) == False):
                                     if (len(ansFn['options']) == 0) or (('options' not in ansFn.keys())):
                                         try:
                                             orgArr = orgCreator(obSub["userProfile"]["organisations"])
                                             final_worker = FinalWorker(ansFn,ansFn['externalId'], ansFn['value'], instNumber, ansFn['value'], orgArr, creatingObj)
-                                            final_worker.run()
+                                            message_id,count = final_worker.run()
+                                            list_message_id_fetch.extend(message_id)
+                                            flag_count_fetch = flag_count_fetch + count
                                         except Exception as e :
                                             errorLogger.error(e, exc_info=True)
+                                        return list_message_id_fetch,flag_count_fetch
                                     else:
                                         labelIndex = 0
                                         for quesOpt in ansFn['options']:
@@ -419,15 +437,20 @@ def obj_creation(obSub):
                                                     if quesOpt['value'] == ansFn['value'] :
                                                         orgArr = orgCreator(obSub["userProfile"]["organisations"])
                                                         final_worker = FinalWorker(ansFn,ansFn['externalId'], ansFn['value'], instNumber, quesOpt['label'], orgArr, creatingObj)
-                                                        final_worker.run()     
+                                                        message_id,count = final_worker.run() 
+                                                        list_message_id_fetch.extend(message_id)
+                                                        flag_count_fetch = flag_count_fetch + count    
                                                 elif type(ansFn['value']) == list:
                                                     for ansArr in ansFn['value']:
                                                         if quesOpt['value'] == ansArr:
                                                             orgArr = orgCreator(obSub["userProfile"]["organisations"])
                                                             final_worker = FinalWorker(ansFn,ansFn['externalId'], ansArr, instNumber, quesOpt['label'], orgArr, creatingObj)
-                                                            final_worker.run()
+                                                            message_id,count = final_worker.run()
+                                                            list_message_id_fetch.extend(message_id)
+                                                            flag_count_fetch = flag_count_fetch + count
                                             except KeyError:
                                                 pass
+                                        return list_message_id_fetch,flag_count_fetch
                                 except KeyError:
                                     pass
 
@@ -438,20 +461,19 @@ def obj_creation(obSub):
                                 ans['responseType'] == 'number' or ans['responseType'] == 'date'
                             ):   
                                 inst_cnt = ''
-                                fetchingQuestiondetails(ans, inst_cnt,obSub['_id'])
+                                message_id,flag_count = fetchingQuestiondetails(ans, inst_cnt)
+                                list_message_id_ext.extend(message_id)
+                                flag_count_ext = flag_count_ext + flag_count
 
                             elif ans['responseType'] == 'matrix' and len(ans['value']) > 0:
                                 inst_cnt =0
                                 for instances in ans['value']:
                                     inst_cnt = inst_cnt + 1
                                     for instance in instances.values():
-                                        fetchingQuestiondetails(instance,inst_cnt,obSub['_id'])    
-
-                        surveySubCollec.update_one(
-                                    {"_id": ObjectId(obSub['_id'])},
-                                    {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
-                                    )
-                        infoLogger.info("Updated the Mongo survey submission collection after inserting data to sl-survey datasource")         
+                                        message_id,flag_count = fetchingQuestiondetails(instance,inst_cnt)    
+                                        list_message_id_ext.extend(message_id)
+                                        flag_count_ext = flag_count_ext + flag_count
+                return list_message_id_ext,flag_count_ext        
             else:
                 infoLogger.info(f"survey_Submission_id {surveySubmissionId} is already exists in the sl-survey datasource.")        
         else:                        
@@ -468,6 +490,8 @@ def main_data_extraction(obSub):
     '''Function to process survey submission data before sending it to Kafka topics'''
     try :
         infoLogger.info(f"Starting to process kafka event for the Survey Submission Id : {obSub['_id']}. For Survey Status report")
+        list_message_id = []
+        flag_count = 0
         #processing for sl-survey-meta datsource 
         surveySubmissionId =  str(obSub['_id'])
         submission_exits_in_meta = check_survey_submission_id_existance(surveySubmissionId,"surveySubmissionId","sl-survey-meta")
@@ -507,15 +531,15 @@ def main_data_extraction(obSub):
             else:
                 surveySubQuestionsObj['organisationName'] = None
             
+            flag_count += 1
+            try : 
+            # Insert data to sl-observation-meta druid datasource if status is anything 
+                message_id = send_data_to_kafka(surveySubQuestionsObj,config.get("KAFKA", "survey_meta_druid_topic"))
+                list_message_id.append(message_id)
+                infoLogger.info(f"Data with submission_id {surveySubmissionId} is being inserted into the sl-survey-meta datasource.")
+            except Exception as e:
+                errorLogger.error(f"Error sending data for submission_id ({surveySubmissionId}) to sl-survey-meta datasource: {e}", exc_info=True)
             # Insert data to sl-survey-meta druid datasource if status is anything 
-            producer.send((config.get("KAFKA", "survey_meta_druid_topic")), json.dumps(surveySubQuestionsObj).encode('utf-8'))  
-            producer.flush()
-            infoLogger.info(f"Data with submission_id {surveySubmissionId} is being inserted into the sl-survey-meta datasource.")
-            surveySubCollec.update_one(
-                    {"_id": ObjectId(surveySubmissionId)},
-                    {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
-                )
-            infoLogger.info("Updated the Mongo survey submission collection after inserting data to sl-survey-status-meta datasource") 
         else :
             infoLogger.info(f"Data with submission_id {surveySubmissionId} is already exists in the sl-survey-meta datasource.")    
 
@@ -528,14 +552,14 @@ def main_data_extraction(obSub):
                 survey_status = {}
                 survey_status['surveySubmissionId'] = obSub['_id']
                 survey_status['startedAt'] = obSub['createdAt']
-                producer.send((config.get("KAFKA", "survey_started_druid_topic")), json.dumps(survey_status).encode('utf-8'))
-                producer.flush()
-                infoLogger.info(f"Data with submission_id {surveySubmissionId} is being inserted into the sl-survey-status-started datasource.")
-                surveySubCollec.update_one(
-                    {"_id": ObjectId(surveySubmissionId)},
-                    {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
-                )
-                infoLogger.info("Updated the Mongo survey submission collection after inserting data to sl-survey-status-started datasource") 
+                flag_count += 1
+                try : 
+                # Insert data to sl-observation-meta druid datasource if status is anything 
+                    message_id = send_data_to_kafka(survey_status,config.get("KAFKA", "survey_started_druid_topic"))
+                    list_message_id.append(message_id)
+                    infoLogger.info(f"Data with submission_id {surveySubmissionId} is being inserted into the sl-survey-status-started datasource.")
+                except Exception as e:
+                    errorLogger.error(f"Error sending data for submission_id ({surveySubmissionId}) to sl-survey-status-started datasource: {e}", exc_info=True)
             else:
                 infoLogger.info(f"Data with submission_id {surveySubmissionId} is already exists in the sl-survey-status-started datasource.")          
 
@@ -547,14 +571,14 @@ def main_data_extraction(obSub):
                 infoLogger.info(f"No data duplection for the Submission ID : {surveySubmissionId} in sl-survey-status-inprogress ")
                 survey_status['surveySubmissionId'] = obSub['_id']
                 survey_status['inprogressAt'] = obSub['updatedAt']
-                producer.send((config.get("KAFKA", "survey_inprogress_druid_topic")), json.dumps(survey_status).encode('utf-8'))
-                producer.flush()
-                infoLogger.info(f"Data with submission_id {surveySubmissionId} is being inserted into the sl-survey-status-inprogress datasource.")
-                surveySubCollec.update_one(
-                        {"_id": ObjectId(surveySubmissionId)},
-                        {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
-                    )
-                infoLogger.info("Updated the Mongo survey submission collection after inserting data to sl-survey-status-inprogress datasource")
+                flag_count += 1
+                try : 
+                # Insert data to sl-observation-meta druid datasource if status is anything 
+                    message_id = send_data_to_kafka(survey_status,config.get("KAFKA", "survey_inprogress_druid_topic"))
+                    list_message_id.append(message_id)
+                    infoLogger.info(f"Data with submission_id {surveySubmissionId} is being inserted into the sl-survey-status-inprogress datasource.")
+                except Exception as e:
+                    errorLogger.error(f"Error sending data for submission_id ({surveySubmissionId}) to sl-survey-status-inprogress datasource: {e}", exc_info=True)
             else:
                 infoLogger.info(f"Data with submission_id {surveySubmissionId} is already exists in the sl-survey-status-inprogress datasource.")
 
@@ -566,17 +590,17 @@ def main_data_extraction(obSub):
                 survey_status = {}
                 survey_status['surveySubmissionId'] = obSub['_id']
                 survey_status['completedAt'] = obSub['completedDate']
-                _id = survey_status.get('surveySubmissionId', None) 
-                producer.send((config.get("KAFKA", "survey_completed_druid_topic")), json.dumps(survey_status).encode('utf-8'))
-                producer.flush()
-                infoLogger.info(f"Data with submission_id {surveySubmissionId} is being inserted into the sl-survey-status-completed datasource")
-                surveySubCollec.update_one(
-                            {"_id": ObjectId(surveySubmissionId)},
-                            {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
-                        )
-                infoLogger.info("Updated the Mongo survey submission collection after inserting data to sl-survey-status-completed datasource") 
+                flag_count += 1
+                try : 
+                # Insert data to sl-observation-meta druid datasource if status is anything 
+                    message_id = send_data_to_kafka(survey_status,config.get("KAFKA", "survey_completed_druid_topic"))
+                    list_message_id.append(message_id)
+                    infoLogger.info(f"Data with submission_id {surveySubmissionId} is being inserted into the sl-survey-status-completed datasource.")
+                except Exception as e:
+                    errorLogger.error(f"Error sending data for submission_id ({surveySubmissionId}) to sl-survey-status-completed datasource: {e}", exc_info=True)
             else:
                 infoLogger.info(f"Data with submission_id {surveySubmissionId} is already exists in the sl-survey-status-completed datasource")
+        return list_message_id,flag_count
 
         infoLogger.info(f"Completed processing kafka event for the Survey Submission Id : {surveySubmissionId}. For Survey Status report")
     except Exception as e:
@@ -593,8 +617,25 @@ async def surveyFaust(consumer):
             msg_data = json.loads(msg_val)
             
             infoLogger.info(f"========== START OF SURVEY SUBMISSION EVENT PROCESSING - {datetime.datetime.now()} ==========")
-            obj_creation(msg_data)
-            main_data_extraction(msg_data)      
+            list_message_id = []
+            flag_count = 0
+            list_message_id_obj, flag_count_obj = obj_creation(msg_data)
+            list_message_id.extend(list_message_id_obj)
+            flag_count = flag_count + flag_count_obj
+            list_message_id_main , flag_count_main = main_data_extraction(msg_data)
+            list_message_id.extend(list_message_id_main)
+            flag_count = flag_count + flag_count_main 
+            if len(list_message_id) == flag_count:
+                update_result = surveySubCollec.update_one(
+                    {"_id": ObjectId(msg_data['_id'])},
+                    {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
+                    )
+                if update_result.modified_count == 1:
+                    infoLogger.info("Updated the Mongo survey submission collection after inserting data into to kafka topic")
+                else:
+                    infoLogger.info("Failed to update the Mongo survey submission collection (modified_count: {})".format(update_result.modified_count))
+            else:
+                infoLogger.info("As the number of Kafka message IDs did not align with the number of ingestions, the Mongo survey submission collection was not updated.")     
             infoLogger.info(f"********** END OF SURVEY SUBMISSION EVENT PROCESSING - {datetime.datetime.now()} **********")
 
         except Exception as e:
