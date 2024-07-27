@@ -53,9 +53,9 @@ slObservation = {
   "questionName": "",
   "questionECM": "",
   "criteriaId": "",
-  "completedDate": "2024-03-26T16:14:10.690Z",
-  "createdAt": "2024-03-26T16:12:49.079Z",
-  "updatedAt": "2024-03-26T16:14:10.691Z",
+  "completedDate": "",
+  "createdAt": "",
+  "updatedAt": "",
   "remarks": "",
   "totalEvidences": "",
   "instanceParentQuestion": "",
@@ -73,7 +73,7 @@ slObservation = {
   "userProfile": ""
 }
 slObservationMeta = {
-    "completedDate": "2024-03-22T05:55:59.040Z",
+    "completedDate": "",
     "createdBy": "",
     "entity": "",
     "entityExternalId": "",
@@ -89,27 +89,27 @@ slObservationMeta = {
     "solutionName": "",
     "userType": "",
     "userProfile": "",
-    "createdAt": "2024-03-22T05:55:59.040Z"
+    "createdAt": ""
 }
 
 slObservationStatusStarted = {
-    "startedAt": "2024-04-22T13:37:28.289Z",
+    "startedAt": "",
     "observationSubmissionId": ""
 }
 
 slObservationStatusInprogress = {
-    "inprogressAt": "2024-04-22T13:37:28.289Z",
+    "inprogressAt": "",
     "observationSubmissionId": ""
 }
 
 slObservationStatusCompleted = {
-    "completedAt": "2024-04-22T13:37:28.289Z",
+    "completedAt": "",
     "observationSubmissionId": ""
 }
 
 slSurvey = {
-    "completedDate": "2024-07-18T06:58:19.373Z",
-    "createdAt": "2024-07-18T06:57:17.862Z",
+    "completedDate": "",
+    "createdAt": "",
     "createdBy": "",
     "criteriaExternalId": "",
     "criteriaId": "",
@@ -135,14 +135,14 @@ slSurvey = {
     "surveyName": "",
     "surveySubmissionId": "",
     "total_evidences": "",
-    "updatedAt": "2024-07-18T06:58:19.373Z",
+    "updatedAt": "",
     "user_type": ""
 }
 
 slSurveyMeta = {
-    "completedDate": "2024-04-22T13:37:28.289Z",
+    "completedDate": "",
     "createdBy": "",
-    "createdAt": "2024-04-22T11:48:59.585Z",
+    "createdAt": "",
     "isAPrivateProgram": "",
     "organisationName": "",
     "solutionExternalId": "",
@@ -155,17 +155,17 @@ slSurveyMeta = {
 }
 
 slSurveyStatusStarted = {
-    "startedAt": "2024-04-22T13:37:28.289Z",
+    "startedAt": "",
     "surveySubmissionId": ""
 }
 
 slSurveyStatusInprogress = {
-    "inprogressAt": "2024-04-22T13:37:28.289Z",
+    "inprogressAt": "",
     "surveySubmissionId": ""
 }
 
 slSurveyStatusCompleted = {
-    "completedAt": "2024-04-22T13:37:28.289Z",
+    "completedAt": "",
     "surveySubmissionId": ""
 }
 
