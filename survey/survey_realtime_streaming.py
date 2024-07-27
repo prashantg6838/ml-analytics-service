@@ -213,9 +213,12 @@ class FinalWorker:
                 survey_id = finalObj["surveyId"]
                 question_id = finalObj["questionId"]
                 flag_count += 1
-                message_id  = send_data_to_kafka(finalObj,config.get("KAFKA", "survey_druid_topic"))
-                list_message_id.append(message_id)
-                infoLogger.info(f"Data for surveyId ({survey_id}) and questionId ({question_id}) inserted into sl-survey datasource")
+                try :
+                    message_id  = send_data_to_kafka(finalObj,config.get("KAFKA", "survey_druid_topic"))
+                    list_message_id.append(message_id)
+                    infoLogger.info(f"Data for surveyId ({survey_id}) and questionId ({question_id}) inserted into sl-survey datasource")
+                except Exception as e :
+                    errorLogger.error(e,exc_info=True)
             return list_message_id,flag_count
         else:
             finalObj = {}
@@ -223,9 +226,12 @@ class FinalWorker:
             survey_id = finalObj["surveyId"]
             question_id = finalObj["questionId"]
             flag_count += 1
-            message_id = send_data_to_kafka(finalObj,config.get("KAFKA", "survey_druid_topic"))
-            list_message_id.append(message_id)
-            infoLogger.info(f"Data for surveyId ({survey_id}) and questionId ({question_id}) inserted into sl-survey datasource")
+            try:
+                message_id = send_data_to_kafka(finalObj,config.get("KAFKA", "survey_druid_topic"))
+                list_message_id.append(message_id)
+                infoLogger.info(f"Data for surveyId ({survey_id}) and questionId ({question_id}) inserted into sl-survey datasource")
+            except Exception as e :
+                errorLogger.error(e,exc_info=True)
             return list_message_id,flag_count
         
 
@@ -554,7 +560,7 @@ def main_data_extraction(obSub):
                 survey_status['startedAt'] = obSub['createdAt']
                 flag_count += 1
                 try : 
-                # Insert data to sl-observation-meta druid datasource if status is anything 
+                    # Insert data to sl-observation-status-started druid datasource if status is started 
                     message_id = send_data_to_kafka(survey_status,config.get("KAFKA", "survey_started_druid_topic"))
                     list_message_id.append(message_id)
                     infoLogger.info(f"Data with submission_id {surveySubmissionId} is being inserted into the sl-survey-status-started datasource.")
@@ -563,7 +569,6 @@ def main_data_extraction(obSub):
             else:
                 infoLogger.info(f"Data with submission_id {surveySubmissionId} is already exists in the sl-survey-status-started datasource.")          
 
-        # Insert data to sl-survey-status-started druid datasource if status is inprogress
         elif obSub['status'] == 'inprogress':
             infoLogger.info(f"started extracting keys for sl-survey-status-inprogress datasource")
             submission_exits_in_inprogress = check_survey_submission_id_existance(surveySubmissionId,"surveySubmissionId","sl-survey-status-inprogress")
@@ -573,7 +578,7 @@ def main_data_extraction(obSub):
                 survey_status['inprogressAt'] = obSub['updatedAt']
                 flag_count += 1
                 try : 
-                # Insert data to sl-observation-meta druid datasource if status is anything 
+                    # Insert data to sl-observation-status-inprogress druid datasource if status is inprogress 
                     message_id = send_data_to_kafka(survey_status,config.get("KAFKA", "survey_inprogress_druid_topic"))
                     list_message_id.append(message_id)
                     infoLogger.info(f"Data with submission_id {surveySubmissionId} is being inserted into the sl-survey-status-inprogress datasource.")
@@ -592,7 +597,7 @@ def main_data_extraction(obSub):
                 survey_status['completedAt'] = obSub['completedDate']
                 flag_count += 1
                 try : 
-                # Insert data to sl-observation-meta druid datasource if status is anything 
+                    # Insert data to sl-observation-status-completed druid datasource if status is completed
                     message_id = send_data_to_kafka(survey_status,config.get("KAFKA", "survey_completed_druid_topic"))
                     list_message_id.append(message_id)
                     infoLogger.info(f"Data with submission_id {surveySubmissionId} is being inserted into the sl-survey-status-completed datasource.")
