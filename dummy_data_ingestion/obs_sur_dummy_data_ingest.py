@@ -170,50 +170,31 @@ slSurveyStatusCompleted = {
 }
 
 def send_to_kafka(topic, data):
-    producer.send(topic, json.dumps(data).encode('utf-8'))
-    producer.flush()
-    print(f"Sent data to {topic}: {data}")
+    try:
+        producer.send(topic, json.dumps(data).encode('utf-8'))
+        producer.flush()
+        print(f"Sent data to {topic}: {data}")
+    except:
+        print(f"Failed to send event to {topic}")
 
 # Sending survey data
-try:
-    send_to_kafka(config.get("KAFKA", "survey_druid_topic"), slSurvey)
-except Exception as e:
-    print("Failed to send event to survey_druid_topic")
-try:    
-    send_to_kafka(config.get("KAFKA", "survey_meta_druid_topic"), slSurveyMeta)
-except Exception as e:
-    print("Failed to send event to survey_meta_druid_topic")
-try:
-    send_to_kafka(config.get("KAFKA", "survey_started_druid_topic"), slSurveyStatusStarted)
-except Exception as e:
-    print("Failed to send event to survey_started_druid_topic")
-try:    
-    send_to_kafka(config.get("KAFKA", "survey_inprogress_druid_topic"), slSurveyStatusInprogress)
-except Exception as e:
-    print("Failed to send event to survey_inprogress_druid_topic")
-try:
-    send_to_kafka(config.get("KAFKA", "survey_completed_druid_topic"), slSurveyStatusCompleted)
-except Exception as e:
-    print("Failed to send event to survey_completed_druid_topic")
+send_to_kafka(config.get("KAFKA", "survey_druid_topic"), slSurvey)
+  
+send_to_kafka(config.get("KAFKA", "survey_meta_druid_topic"), slSurveyMeta)
+
+send_to_kafka(config.get("KAFKA", "survey_started_druid_topic"), slSurveyStatusStarted)
+   
+send_to_kafka(config.get("KAFKA", "survey_inprogress_druid_topic"), slSurveyStatusInprogress)
+
+send_to_kafka(config.get("KAFKA", "survey_completed_druid_topic"), slSurveyStatusCompleted)
 
 # Sending observation data
-try:
-    send_to_kafka(config.get("KAFKA", "observation_druid_topic"), slObservation)
-except Exception as e:
-    print("Failed to send event to observation_druid_topic")
-try:
-    send_to_kafka(config.get("KAFKA", "observation_meta_druid_topic"), slObservationMeta)
-except Exception as e:
-    print("Failed to send event to observation_meta_druid_topic")
-try:
-    send_to_kafka(config.get("KAFKA", "observation_started_druid_topic"), slObservationStatusStarted)
-except Exception as e:
-    print("Failed to send event to observation_started_druid_topic")
-try:
-    send_to_kafka(config.get("KAFKA", "observation_inprogress_druid_topic"), slObservationStatusInprogress)
-except Exception as e:
-    print("Failed to send event to observation_inprogress_druid_topic")
-try:
-    send_to_kafka(config.get("KAFKA", "observation_completed_druid_topic"), slObservationStatusCompleted)
-except Exception as e:
-    print("Failed to send event to observation_completed_druid_topic")
+send_to_kafka(config.get("KAFKA", "observation_druid_topic"), slObservation)
+
+send_to_kafka(config.get("KAFKA", "observation_meta_druid_topic"), slObservationMeta)
+
+send_to_kafka(config.get("KAFKA", "observation_started_druid_topic"), slObservationStatusStarted)
+
+send_to_kafka(config.get("KAFKA", "observation_inprogress_druid_topic"), slObservationStatusInprogress)
+
+send_to_kafka(config.get("KAFKA", "observation_completed_druid_topic"), slObservationStatusCompleted)
