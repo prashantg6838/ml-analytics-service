@@ -137,10 +137,10 @@ def check_observation_submission_id_existance(observationId,column_name,table_na
 
 def set_null_value(data):
   if "userProfile" in data :
-    if config.get("OUTPUT_DIR","CAPTURE_USER_PROFILE") == "True":
+    if config.get("OUTPUT_DIR","CAPTURE_USER_PROFILE") == "False":
       data['userProfile'] = ''
   if "organisationName" in data:
-    if config.get("OUTPUT_DIR","CAPTURE_ORGANISATION_NAME") == "True":
+    if config.get("OUTPUT_DIR","CAPTURE_ORGANISATION_NAME") == "False":
       data['organisationName'] = ''
   return data
 
@@ -187,7 +187,7 @@ def orgName(val):
       orgObj = {}
       if org["isSchool"] == False:
           orgObj['orgId'] = org['organisationId']
-          orgObj['orgName'] = ''
+          orgObj['orgName'] = org["orgName"]
           orgarr.append(orgObj)
   return orgarr
 

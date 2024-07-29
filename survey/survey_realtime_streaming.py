@@ -214,10 +214,10 @@ def check_survey_submission_id_existance(key,column_name,table_name):
 
 def set_null_value(data):
     if "userProfile" in data :
-        if config.get("OUTPUT_DIR","CAPTURE_USER_PROFILE") == "True":
+        if config.get("OUTPUT_DIR","CAPTURE_USER_PROFILE") == "False":
             data['userProfile'] = ''
     if "organisationName" in data:
-        if config.get("OUTPUT_DIR","CAPTURE_ORGANISATION_NAME") == "True":
+        if config.get("OUTPUT_DIR","CAPTURE_ORGANISATION_NAME") == "False":
             data['organisationName'] = ''
     return data
 
@@ -678,9 +678,9 @@ def main_data_extraction(obSub):
                     errorLogger.error(f"Error sending data for submission_id ({surveySubmissionId}) to sl-survey-status-completed datasource: {e}", exc_info=True)
             else:
                 infoLogger.info(f"Data with submission_id {surveySubmissionId} is already exists in the sl-survey-status-completed datasource")
-        return list_message_id,flag_count
 
         infoLogger.info(f"Completed processing kafka event for the Survey Submission Id : {surveySubmissionId}. For Survey Status report")
+        return list_message_id,flag_count
     except Exception as e:
     # Log any other exceptions
         errorLogger.error(e,exc_info=True)
