@@ -174,8 +174,8 @@ def send_to_kafka(topic, data):
         producer.send(topic, json.dumps(data).encode('utf-8'))
         producer.flush()
         print(f"Sent data to {topic}: {data}")
-    except:
-        print(f"Failed to send event to {topic}")
+    except Exception as e:
+        print(f"Failed to send data to {topic}: {e}")
 
 # Sending survey data
 send_to_kafka(config.get("KAFKA", "survey_druid_topic"), slSurvey)
