@@ -140,7 +140,7 @@ def set_null_value(data):
     if config.get("OUTPUT_DIR","CAPTURE_USER_PROFILE") == "False":
       data['userProfile'] = ''
   if "organisationName" in data:
-    if config.get("OUTPUT_DIR","CAPTURE_ORGANISATION_NAME") == "False":
+    if config.get("OUTPUT_DIR","CAPTURE_USER_PROFILE") == "False":
       data['organisationName'] = ''
   return data
 
@@ -148,7 +148,7 @@ def send_data_to_kafka(data,topic):
   modified_data = set_null_value(data)
   future = producer.send(topic, json.dumps(modified_data).encode('utf-8'))
   producer.flush()
-  record_metadata = future.get(timeout=10)
+  record_metadata = future.get()
   message_id = record_metadata.offset
   return message_id
 
@@ -996,7 +996,7 @@ try:
 
       # Insert data to sl-observation-status-started druid datasource if status is started
       if obSub['status'] == 'started':
-        submission_exits_in_started = False#check_observation_submission_id_existance(observationSubmissionId,"observationSubmissionId","sl-observation-status-started")
+        submission_exits_in_started = check_observation_submission_id_existance(observationSubmissionId,"observationSubmissionId","sl-observation-status-started")
         if submission_exits_in_started == False:
           infoLogger.info(f"No data duplection for the Submission ID : {observationSubmissionId} in sl-observation-status-started ")  
           observation_status = {}
