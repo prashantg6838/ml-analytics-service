@@ -1,1 +1,0 @@
-{"kafka_topic":"observation_inprogress_druid_topic","datasource":"sl-observation-status-inprogress","columns":{"inprogressAt":"","observationSubmissionId":""}}

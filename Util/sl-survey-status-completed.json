@@ -1,1 +1,0 @@
-{"kafka_topic":"survey_completed_druid_topic","datasource":"sl-surevy-status-completed","columns":{"completedAt":"","surveySubmissionId":""}}

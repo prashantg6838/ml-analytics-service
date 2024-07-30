@@ -1,1 +1,0 @@
-{"kafka_topic":"observation_started_druid_topic","datasource":"sl-observation-status-started","columns":{"startedAt":"","observationSubmissionId":""}}

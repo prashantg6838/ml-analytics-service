@@ -1,1 +1,0 @@
-{"kafka_topic":"survey_started_druid_topic","datasource":"sl-survey-status-started","columns":{"startedAt":"","surveySubmissionId":""}}
