@@ -1,0 +1,1 @@
+{"kafka_topic":"survey_inprogress_druid_topic","datasource":"sl-survey-status-inprogress","columns":{"inprogressAt":"","surveySubmissionId":""}}

@@ -744,6 +744,7 @@ try:
                                   list_message_id.append(message_id)
                                   infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) inserted into sl-observation datasource")
                                 except Exception as e :
+                                  infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) Not inserted into sl-observation datasource")
                                   errorLogger.error(e,exc_info=True)
                           else :
                             finalObj = {}
@@ -761,6 +762,7 @@ try:
                                 list_message_id.append(message_id)
                                 infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) inserted into sl-observation datasource")  
                               except Exception as e :
+                                infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) Not inserted into sl-observation datasource")
                                 errorLogger.error(e,exc_info=True)                           
                       except KeyError:
                         pass
@@ -788,6 +790,7 @@ try:
                                       list_message_id.append(message_id)
                                       infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) inserted into sl-observation datasource")
                                     except Exception as e :
+                                      infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) Not inserted into sl-observation datasource")
                                       errorLogger.error(e,exc_info=True)
                               else :
                                 finalObj = {}
@@ -805,6 +808,7 @@ try:
                                     list_message_id.append(message_id)
                                     infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) inserted into sl-observation datasource")
                                   except Exception as e :
+                                    infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) Not inserted into sl-observation datasource")
                                     errorLogger.error(e,exc_info=True)
                           elif type(ansFn['value']) == list:
                             for ansArr in ansFn['value']:
@@ -827,6 +831,7 @@ try:
                                         list_message_id.append(message_id)
                                         infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) inserted into sl-observation datasource")
                                       except Exception as e:
+                                        infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) Not inserted into sl-observation datasource")
                                         errorLogger.error(e,exc_info=True)
                                 else :
                                   finalObj = {}
@@ -845,6 +850,7 @@ try:
                                       list_message_id.append(message_id)
                                       infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) inserted into sl-observation datasource")
                                     except Exception as e :
+                                      infoLogger.info(f"Data for observationId ({finalObj['observationId']}) and questionId ({finalObj['questionId']}) Not inserted into sl-observation datasource")
                                       errorLogger.error(e,exc_info=True)
                                 labelIndex = labelIndex + 1
                         except KeyError:
@@ -882,7 +888,8 @@ try:
     infoLogger.info(f"Completed processing kafka event for the Observation Submission Id : {obSub['_id']}. For Observation Question report ") 
     return list_message_id_ext,flag_count_ext                   
 except Exception as e:
-  errorLogger.error(e, exc_info=True)
+  infoLogger.info(f"Failed to process obj_creation function")
+  errorLogger.error(f"Failed to process obj_creation function{e}", exc_info=True)
 
 # Main data extraction function
 try:
@@ -996,67 +1003,78 @@ try:
 
       # Insert data to sl-observation-status-started druid datasource if status is started
       if obSub['status'] == 'started':
-        submission_exits_in_started = check_observation_submission_id_existance(observationSubmissionId,"observationSubmissionId","sl-observation-status-started")
-        if submission_exits_in_started == False:
-          infoLogger.info(f"No data duplection for the Submission ID : {observationSubmissionId} in sl-observation-status-started ")  
-          observation_status = {}
-          observation_status['observationSubmissionId'] = obSub['_id']
-          try:
-            observation_status['startedAt'] = obSub['createdAt']
-          except KeyError:
-            observation_status['startedAt'] = ''
-          flag_count += 1
-          try : 
-            message_id = send_data_to_kafka(observation_status,config.get("KAFKA", "observation_started_druid_topic"))
-            list_message_id.append(message_id)
-            infoLogger.info(f"Data with submission_id {observationSubmissionId} is being inserted into the sl-observation-status-started datasource.")
-          except Exception as e :
-            errorLogger.error(f"Error sending data for observationId ({observationSubmissionId}) to sl-observation-status-started datasource: {e}", exc_info=True)
-        else :
-          infoLogger.info(f"Data with submission_id {observationSubmissionId} is already exists in the sl-observation-status-started datasource.") 
-
+        try :
+          submission_exits_in_started = check_observation_submission_id_existance(observationSubmissionId,"observationSubmissionId","sl-observation-status-started")
+          if submission_exits_in_started == False:
+            infoLogger.info(f"No data duplection for the Submission ID : {observationSubmissionId} in sl-observation-status-started ")  
+            observation_status = {}
+            observation_status['observationSubmissionId'] = obSub['_id']
+            try:
+              observation_status['startedAt'] = obSub['createdAt']
+            except KeyError:
+              observation_status['startedAt'] = ''
+            flag_count += 1
+            try : 
+              message_id = send_data_to_kafka(observation_status,config.get("KAFKA", "observation_started_druid_topic"))
+              list_message_id.append(message_id)
+              infoLogger.info(f"Data with submission_id {observationSubmissionId} is being inserted into the sl-observation-status-started datasource.")
+            except Exception as e :
+              errorLogger.error(f"Error sending data for observationId ({observationSubmissionId}) to sl-observation-status-started datasource: {e}", exc_info=True)
+          else :
+            infoLogger.info(f"Data with submission_id {observationSubmissionId} is already exists in the sl-observation-status-started datasource.") 
+        except Exception as e :
+          infoLogger.info(f"failed to ingest data to sl-observation-status-started datasource")
       # Insert data to sl-observation-status-started druid datasource if status is inprogress
       elif obSub['status'] == 'inprogress':
-        submission_exits_in_inprogress = check_observation_submission_id_existance(observationSubmissionId,"observationSubmissionId","sl-observation-status-inprogress")
-        if submission_exits_in_inprogress == False:
-          infoLogger.info(f"No data duplection for the Submission ID : {observationSubmissionId} in sl-observation-status-inprogress ")  
-          observation_status = {}
-          observation_status['observationSubmissionId'] = obSub['_id']
-          observation_status['inprogressAt'] = obSub['updatedAt']
-          flag_count += 1
-          try : 
-            message_id = send_data_to_kafka(observation_status,config.get("KAFKA", "observation_inprogress_druid_topic"))
-            list_message_id.append(message_id)
-            infoLogger.info(f"Data with submission_id {observationSubmissionId} is being inserted into the sl-observation-status-inprogress datasource.")
-          except Exception as e:
-            errorLogger.error(f"Error sending data for observationId ({observationSubmissionId}) to sl-observation-status-inprogress datasource: {e}", exc_info=True)
-        else:       
-          infoLogger.info(f"Data with submission_id {observationSubmissionId} is already exists in the sl-observation-status-inprogress datasource.")
+        try: 
+          submission_exits_in_inprogress = check_observation_submission_id_existance(observationSubmissionId,"observationSubmissionId","sl-observation-status-inprogress")
+          if submission_exits_in_inprogress == False:
+            infoLogger.info(f"No data duplection for the Submission ID : {observationSubmissionId} in sl-observation-status-inprogress ")  
+            observation_status = {}
+            observation_status['observationSubmissionId'] = obSub['_id']
+            observation_status['inprogressAt'] = obSub['updatedAt']
+            flag_count += 1
+            try : 
+              message_id = send_data_to_kafka(observation_status,config.get("KAFKA", "observation_inprogress_druid_topic"))
+              list_message_id.append(message_id)
+              infoLogger.info(f"Data with submission_id {observationSubmissionId} is being inserted into the sl-observation-status-inprogress datasource.")
+            except Exception as e:
+              errorLogger.error(f"Error sending data for observationId ({observationSubmissionId}) to sl-observation-status-inprogress datasource: {e}", exc_info=True)
+          else:       
+            infoLogger.info(f"Data with submission_id {observationSubmissionId} is already exists in the sl-observation-status-inprogress datasource.")
+        except Exception as e :
+          infoLogger.info(f"failed to ingest data to sl-observation-status-inprogress datasource")
+          errorLogger.error(e,exc_info=True)
 
       elif obSub['status'] == 'completed':
-        submission_exits_in_completed = check_observation_submission_id_existance(observationSubmissionId,"observationSubmissionId","sl-observation-status-completed")
-        if submission_exits_in_completed == False:
-          infoLogger.info(f"No data duplection for the Submission ID : {observationSubmissionId} in sl-observation-status-completed")  
-          observation_status = {}
-          observation_status['observationSubmissionId'] = obSub['_id']
-          observation_status['completedAt'] = obSub['completedDate']
-          flag_count += 1
-          try : 
-            message_id = send_data_to_kafka(observation_status,config.get("KAFKA", "observation_completed_druid_topic"))
-            list_message_id.append(message_id)
-            infoLogger.info(f"Data with submission_id {observationSubmissionId} is being inserted into the sl-observation-status-completed datasource")
-          except Exception as e :
-            errorLogger.error(f"Error sending data for observationId ({observationSubmissionId}) to sl-observation-status-completed datasource: {e}", exc_info=True)
-        else:       
-          infoLogger.info(f"Data with submission_id {observationSubmissionId} is already exists in the sl-observation-status-completed datasource")
+        try :
+          submission_exits_in_completed = check_observation_submission_id_existance(observationSubmissionId,"observationSubmissionId","sl-observation-status-completed")
+          if submission_exits_in_completed == False:
+            infoLogger.info(f"No data duplection for the Submission ID : {observationSubmissionId} in sl-observation-status-completed")  
+            observation_status = {}
+            observation_status['observationSubmissionId'] = obSub['_id']
+            observation_status['completedAt'] = obSub['completedDate']
+            flag_count += 1
+            try : 
+              message_id = send_data_to_kafka(observation_status,config.get("KAFKA", "observation_completed_druid_topic"))
+              list_message_id.append(message_id)
+              infoLogger.info(f"Data with submission_id {observationSubmissionId} is being inserted into the sl-observation-status-completed datasource")
+            except Exception as e :
+              errorLogger.error(f"Error sending data for observationId ({observationSubmissionId}) to sl-observation-status-completed datasource: {e}", exc_info=True)
+          else:       
+            infoLogger.info(f"Data with submission_id {observationSubmissionId} is already exists in the sl-observation-status-completed datasource")
+        except Exception as e :
+          infoLogger.info(f"failed to ingest data to sl-observation-status-inprogress datasource")
+          errorLogger.error(e,exc_info=True)     
       infoLogger.info(f"Completed processing kafka event for the observation Submission Id : {obSub['_id']}. For observation Status report")
     except Exception as e:
         # Log any errors that occur during data extraction
         errorLogger.error(e, exc_info=True)
     return list_message_id,flag_count
 except Exception as e:
+    infoLogger.info(f"Failed to process main_data_extraction function")
     # Log any errors that occur during data extraction
-    errorLogger.error(e, exc_info=True)
+    errorLogger.error(f"Failed to process main_data_extraction function{e}", exc_info=True)
 
     
 try:
@@ -1076,20 +1094,26 @@ try:
       list_message_id.extend(list_message_id_main)
       flag_count = flag_count + flag_count_main
       #updating the mongo collection
-      if (len(list_message_id) != 0) and (flag_count != 0):
-        if len(list_message_id) == flag_count:
-          update_result = observationSubCollec.update_one(
-              {"_id": ObjectId(msg_data['_id'])},
-              {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
-          )
-          if update_result.modified_count == 1:
+      has_duplicates = len(list_message_id) != len(set(list_message_id))
+      has_null_values = any(value is None for value in list_message_id)
+      if (has_duplicates == False) and (has_null_values == False) : 
+        if (len(list_message_id) != 0) and (flag_count != 0):
+          if len(list_message_id) == flag_count:
+            try : 
+              observationSubCollec.update_one(
+                  {"_id": ObjectId(msg_data['_id'])},
+                  {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
+              )
               infoLogger.info("Updated the Mongo observation submission collection after inserting data into kafka topic")
+            except Exception as e :
+              infoLogger.info("Failed to update the Mongo observation submission collection")
+              errorLogger.error(f"Failed to update the Mongo observation submission collection{e}",exc_info=True)
           else:
-              infoLogger.info("Failed to update the Mongo observation submission collection (modified_count: {})".format(update_result.modified_count))
+            infoLogger.info("As the number of Kafka message IDs did not align with the number of ingestions, the Mongo observation submission collection was not updated.")
         else:
-          infoLogger.info("As the number of Kafka message IDs did not align with the number of ingestions, the Mongo observation submission collection was not updated.")
+          infoLogger.info("Since both Kafka ID count and flag count are zero, the MongoDB observation submission collection will not be updated")
       else:
-        infoLogger.info("Since both Kafka ID count and flag count are zero, the MongoDB observation submission collection will not be updated")
+        infoLogger.info("As list_message_id contains either duplicate value or null values hence the MongoDB observation submission collection will not be updated ")    
       infoLogger.info(f"********** END OF OBSERVATION SUBMISSION EVENT PROCESSING - {datetime.datetime.now()}**********")
 except Exception as e:
     # Log any other exceptions

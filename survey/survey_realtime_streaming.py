@@ -213,12 +213,10 @@ def check_survey_submission_id_existance(key,column_name,table_name):
         errorLogger.error(f"Failed to check the {table_name} datasource {e}",exc_info=True)
 
 def set_null_value(data):
-    if "userProfile" in data :
+    if ("userProfile" in data) and ("organisationName" in data):
         if config.get("OUTPUT_DIR","CAPTURE_USER_PROFILE") == "False":
             data['userProfile'] = ''
-    if "organisationName" in data:
-        if config.get("OUTPUT_DIR","CAPTURE_USER_PROFILE") == "False":
-            data['organisationName'] = ''
+            data['organisationName'] = ''        
     return data
 
 def send_data_to_kafka(data,topic):
@@ -257,7 +255,8 @@ class FinalWorker:
                     list_message_id.append(message_id)
                     infoLogger.info(f"Data for surveyId ({survey_id}) and questionId ({question_id}) inserted into sl-survey datasource")
                 except Exception as e :
-                    errorLogger.error(e,exc_info=True)
+                    infoLogger.info(f"Failed to insert data for surveyId ({survey_id}) and questionId ({question_id}) into sl-survey datasource ")
+                    errorLogger.error(f"Data for surveyId ({survey_id}) and questionId ({question_id}) not inserted into sl-survey datasource{e}",exc_info=True)
             return list_message_id,flag_count
         else:
             finalObj = {}
@@ -270,7 +269,8 @@ class FinalWorker:
                 list_message_id.append(message_id)
                 infoLogger.info(f"Data for surveyId ({survey_id}) and questionId ({question_id}) inserted into sl-survey datasource")
             except Exception as e :
-                errorLogger.error(e,exc_info=True)
+                infoLogger.info(f"Failed to insert data for surveyId ({survey_id}) and questionId ({question_id}) into sl-survey datasource ")
+                errorLogger.error(f"Data for surveyId ({survey_id}) and questionId ({question_id}) not inserted into sl-survey datasource{e}",exc_info=True)
             return list_message_id,flag_count
         
 
@@ -544,7 +544,8 @@ def obj_creation(obSub):
         return list_message_id_ext,flag_count_ext             
     except Exception as e:
         # Log any errors that occur during processing
-        errorLogger.error(e, exc_info=True)
+        infoLogger.info(f"Failed to process obj_creation function")
+        errorLogger.error(f"Failed to process obj_creation function{e}", exc_info=True)
 
 # Main data extraction function
 
@@ -625,65 +626,77 @@ def main_data_extraction(obSub):
         # Insert data to sl-survey-status-started druid datasource if status is started
         if obSub['status'] == 'started':
             infoLogger.info(f"started extracting keys for sl-survey-status-started datasource")
-            submission_exits_in_started = check_survey_submission_id_existance(surveySubmissionId,"surveySubmissionId","sl-survey-status-started")
-            if submission_exits_in_started == False :
-                infoLogger.info(f"No data duplection for the Submission ID : {surveySubmissionId} in sl-survey-status-started ")
-                survey_status = {}
-                survey_status['surveySubmissionId'] = obSub['_id']
-                survey_status['startedAt'] = obSub['createdAt']
-                flag_count += 1
-                try : 
-                    # Insert data to sl-observation-status-started druid datasource if status is started 
-                    message_id = send_data_to_kafka(survey_status,config.get("KAFKA", "survey_started_druid_topic"))
-                    list_message_id.append(message_id)
-                    infoLogger.info(f"Data with submission_id {surveySubmissionId} is being inserted into the sl-survey-status-started datasource.")
-                except Exception as e:
-                    errorLogger.error(f"Error sending data for submission_id ({surveySubmissionId}) to sl-survey-status-started datasource: {e}", exc_info=True)
-            else:
-                infoLogger.info(f"Data with submission_id {surveySubmissionId} is already exists in the sl-survey-status-started datasource.")          
+            try : 
+                submission_exits_in_started = check_survey_submission_id_existance(surveySubmissionId,"surveySubmissionId","sl-survey-status-started")
+                if submission_exits_in_started == False :
+                    infoLogger.info(f"No data duplection for the Submission ID : {surveySubmissionId} in sl-survey-status-started ")
+                    survey_status = {}
+                    survey_status['surveySubmissionId'] = obSub['_id']
+                    survey_status['startedAt'] = obSub['createdAt']
+                    flag_count += 1
+                    try : 
+                        # Insert data to sl-observation-status-started druid datasource if status is started 
+                        message_id = send_data_to_kafka(survey_status,config.get("KAFKA", "survey_started_druid_topic"))
+                        list_message_id.append(message_id)
+                        infoLogger.info(f"Data with submission_id {surveySubmissionId} is being inserted into the sl-survey-status-started datasource.")
+                    except Exception as e:
+                        errorLogger.error(f"Error sending data for submission_id ({surveySubmissionId}) to sl-survey-status-started datasource: {e}", exc_info=True)
+                else:
+                    infoLogger.info(f"Data with submission_id {surveySubmissionId} is already exists in the sl-survey-status-started datasource.")          
+            except Exception as e:
+                infoLogger.info("failed to ingest data into sl-surevy-status-started datasource")
 
         elif obSub['status'] == 'inprogress':
             infoLogger.info(f"started extracting keys for sl-survey-status-inprogress datasource")
-            submission_exits_in_inprogress = check_survey_submission_id_existance(surveySubmissionId,"surveySubmissionId","sl-survey-status-inprogress")
-            if submission_exits_in_inprogress == False : 
-                infoLogger.info(f"No data duplection for the Submission ID : {surveySubmissionId} in sl-survey-status-inprogress ")
-                survey_status['surveySubmissionId'] = obSub['_id']
-                survey_status['inprogressAt'] = obSub['updatedAt']
-                flag_count += 1
-                try : 
-                    # Insert data to sl-observation-status-inprogress druid datasource if status is inprogress 
-                    message_id = send_data_to_kafka(survey_status,config.get("KAFKA", "survey_inprogress_druid_topic"))
-                    list_message_id.append(message_id)
-                    infoLogger.info(f"Data with submission_id {surveySubmissionId} is being inserted into the sl-survey-status-inprogress datasource.")
-                except Exception as e:
-                    errorLogger.error(f"Error sending data for submission_id ({surveySubmissionId}) to sl-survey-status-inprogress datasource: {e}", exc_info=True)
-            else:
-                infoLogger.info(f"Data with submission_id {surveySubmissionId} is already exists in the sl-survey-status-inprogress datasource.")
+            try : 
+                submission_exits_in_inprogress = check_survey_submission_id_existance(surveySubmissionId,"surveySubmissionId","sl-survey-status-inprogress")
+                if submission_exits_in_inprogress == False : 
+                    infoLogger.info(f"No data duplection for the Submission ID : {surveySubmissionId} in sl-survey-status-inprogress ")
+                    survey_status['surveySubmissionId'] = obSub['_id']
+                    survey_status['inprogressAt'] = obSub['updatedAt']
+                    flag_count += 1
+                    try : 
+                        # Insert data to sl-observation-status-inprogress druid datasource if status is inprogress 
+                        message_id = send_data_to_kafka(survey_status,config.get("KAFKA", "survey_inprogress_druid_topic"))
+                        list_message_id.append(message_id)
+                        infoLogger.info(f"Data with submission_id {surveySubmissionId} is being inserted into the sl-survey-status-inprogress datasource.")
+                    except Exception as e:
+                        errorLogger.error(f"Error sending data for submission_id ({surveySubmissionId}) to sl-survey-status-inprogress datasource: {e}", exc_info=True)
+                else:
+                    infoLogger.info(f"Data with submission_id {surveySubmissionId} is already exists in the sl-survey-status-inprogress datasource.")
+            except Exception as e :
+                infoLogger.info("failed to update the sl-survey-status-inprogress datasource")
+                errorLogger.error(e,exc_info=True)
 
         elif obSub['status'] == 'completed':
             infoLogger.info(f"started extracting keys for sl-survey-status-completed datasource")
-            submission_exits_in_completed = check_survey_submission_id_existance(surveySubmissionId,"surveySubmissionId","sl-survey-status-completed")
-            if submission_exits_in_completed == False : 
-                infoLogger.info(f"No data duplection for the Submission ID : {surveySubmissionId} in sl-survey-status-completed")
-                survey_status = {}
-                survey_status['surveySubmissionId'] = obSub['_id']
-                survey_status['completedAt'] = obSub['completedDate']
-                flag_count += 1
-                try : 
-                    # Insert data to sl-observation-status-completed druid datasource if status is completed
-                    message_id = send_data_to_kafka(survey_status,config.get("KAFKA", "survey_completed_druid_topic"))
-                    list_message_id.append(message_id)
-                    infoLogger.info(f"Data with submission_id {surveySubmissionId} is being inserted into the sl-survey-status-completed datasource.")
-                except Exception as e:
-                    errorLogger.error(f"Error sending data for submission_id ({surveySubmissionId}) to sl-survey-status-completed datasource: {e}", exc_info=True)
-            else:
-                infoLogger.info(f"Data with submission_id {surveySubmissionId} is already exists in the sl-survey-status-completed datasource")
+            try : 
+                submission_exits_in_completed = check_survey_submission_id_existance(surveySubmissionId,"surveySubmissionId","sl-survey-status-completed")
+                if submission_exits_in_completed == False : 
+                    infoLogger.info(f"No data duplection for the Submission ID : {surveySubmissionId} in sl-survey-status-completed")
+                    survey_status = {}
+                    survey_status['surveySubmissionId'] = obSub['_id']
+                    survey_status['completedAt'] = obSub['completedDate']
+                    flag_count += 1
+                    try : 
+                        # Insert data to sl-observation-status-completed druid datasource if status is completed
+                        message_id = send_data_to_kafka(survey_status,config.get("KAFKA", "survey_completed_druid_topic"))
+                        list_message_id.append(message_id)
+                        infoLogger.info(f"Data with submission_id {surveySubmissionId} is being inserted into the sl-survey-status-completed datasource.")
+                    except Exception as e:
+                        errorLogger.error(f"Error sending data for submission_id ({surveySubmissionId}) to sl-survey-status-completed datasource: {e}", exc_info=True)
+                else:
+                    infoLogger.info(f"Data with submission_id {surveySubmissionId} is already exists in the sl-survey-status-completed datasource")
+            except Exception as e :
+                infoLogger.info("failed to ingest data to sl-survey-status-completed datasourec")
+                errorLogger.error(e,exc_info=True)
 
         infoLogger.info(f"Completed processing kafka event for the Survey Submission Id : {surveySubmissionId}. For Survey Status report")
         return list_message_id,flag_count
     except Exception as e:
     # Log any other exceptions
-        errorLogger.error(e,exc_info=True)
+        infoLogger.info("Failed to process main_data_extraction function")
+        errorLogger.error("Failed to process main_data_extraction function {e}",exc_info=True)
 
 
 @app.agent(rawTopicName)
@@ -703,20 +716,28 @@ async def surveyFaust(consumer):
             list_message_id_main , flag_count_main = main_data_extraction(msg_data)
             list_message_id.extend(list_message_id_main)
             flag_count = flag_count + flag_count_main 
-            if (len(list_message_id) != 0) and (flag_count != 0):
-                if len(list_message_id) == flag_count:
-                    update_result = surveySubCollec.update_one(
-                        {"_id": ObjectId(msg_data['_id'])},
-                        {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
-                        )
-                    if update_result.modified_count == 1:
-                        infoLogger.info("Updated the Mongo survey submission collection after inserting data into to kafka topic")
+            print(list_message_id)
+            print(flag_count)
+            has_duplicates = len(list_message_id) != len(set(list_message_id))
+            has_null_values = any(value is None for value in list_message_id)
+            if (has_duplicates == False) and (has_null_values == False) : 
+                if (len(list_message_id) != 0) and (flag_count != 0):
+                    if len(list_message_id) == flag_count:
+                        try : 
+                            surveySubCollec.update_one(
+                                {"_id": ObjectId(msg_data['_id'])},
+                                {"$set": {"datapipeline.processed_date": datetime.datetime.now()}}
+                                )
+                            infoLogger.info("Updated the Mongo survey submission collection after inserting data into to kafka topic")
+                        except Exception as e :
+                            infoLogger.info(f"Failed to update the Mongo survey submission collection for submissionId {msg_data['_id']}")
+                            errorLogger.error(f"Failed to update the Mongo survey submission collection for submissionId {msg_data['_id']}{e}",exc_info=True)
                     else:
-                        infoLogger.info("Failed to update the Mongo survey submission collection (modified_count: {})".format(update_result.modified_count))
+                        infoLogger.info("As the number of Kafka message IDs did not align with the number of ingestions, the Mongo survey submission collection was not updated.") 
                 else:
-                    infoLogger.info("As the number of Kafka message IDs did not align with the number of ingestions, the Mongo survey submission collection was not updated.") 
+                    infoLogger.info("Since both Kafka ID count and flag count are zero, the MongoDB observation submission collection will not be updated")    
             else:
-                infoLogger.info("Since both Kafka ID count and flag count are zero, the MongoDB observation submission collection will not be updated")    
+                infoLogger.info("As list_message_id contains either duplicate value or null values hence the MongoDB observation submission collection will not be updated ")
             infoLogger.info(f"********** END OF SURVEY SUBMISSION EVENT PROCESSING - {datetime.datetime.now()} **********")
         except Exception as e:
             # Log KeyError

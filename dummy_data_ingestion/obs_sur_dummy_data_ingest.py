@@ -1,7 +1,6 @@
 import json
 import os
-import datetime
-from kafka import KafkaConsumer, KafkaProducer
+from kafka import KafkaProducer
 from configparser import ConfigParser, ExtendedInterpolation
 
 # Load configuration
@@ -13,188 +12,41 @@ config.read(os.path.join(config_path[0], "config.ini"))
 kafka_url = config.get("KAFKA", "url")
 producer = KafkaProducer(bootstrap_servers=[kafka_url])
 
-# Dummy data
-slObservation = {
-  "roleTitle": "",
-  "userBoardName": "",
-  "userType": "",
-  "organisationId": "",
-  "organisationName": "",
-  "observationSubmissionId": "",
-  "appName": "",
-  "solutionType": "",
-  "entity": "",
-  "entityExternalId": "",
-  "course": "",
-  "createdBy": "",
-  "isAPrivateProgram": "",
-  "programExternalId": "",
-  "programId": "",
-  "programName": "",
-  "programDescription": "",
-  "solutionExternalId": "",
-  "solutionId": "",
-  "observationId": "",
-  "criteriaExternalId": "",
-  "criteriaName": "",
-  "criteriaDescription": "",
-  "section": "",
-  "solutionName": "",
-  "scoringSystem": "",
-  "solutionDescription": "",
-  "questionSequenceByEcm": "",
-  "entityType": "",
-  "observationName": "",
-  "questionId": "",
-  "questionAnswer": "",
-  "questionResponseType": "",
-  "questionResponseLabel": "",
-  "questionExternalId": "",
-  "questionName": "",
-  "questionECM": "",
-  "criteriaId": "",
-  "completedDate": "",
-  "createdAt": "",
-  "updatedAt": "",
-  "remarks": "",
-  "totalEvidences": "",
-  "instanceParentQuestion": "",
-  "instanceParentId": "",
-  "instanceParentResponsetype": "",
-  "instanceId": "",
-  "instanceParentExternalId": "",
-  "instanceParentEcmSequence": "",
-  "channel": "",
-  "parent_channel": "",
-  "submissionNumber": "",
-  "submissionTitle": "",
-  "criteriaLevelReport": "",
-  "isRubricDriven": "",
-  "userProfile": ""
-}
-slObservationMeta = {
-    "completedDate": "",
-    "createdBy": "",
-    "entity": "",
-    "entityExternalId": "",
-    "entityType": "",
-    "isAPrivateProgram": "",
-    "observationName": "",
-    "observationSubmissionId": "",
-    "observationId": "",
-    "organisationName": "",
-    "solutionType": "",
-    "solutionExternalId": "",
-    "solutionId": "",
-    "solutionName": "",
-    "userType": "",
-    "userProfile": "",
-    "createdAt": ""
-}
-
-slObservationStatusStarted = {
-    "startedAt": "",
-    "observationSubmissionId": ""
-}
-
-slObservationStatusInprogress = {
-    "inprogressAt": "",
-    "observationSubmissionId": ""
-}
-
-slObservationStatusCompleted = {
-    "completedAt": "",
-    "observationSubmissionId": ""
-}
-
-slSurvey = {
-    "completedDate": "",
-    "createdAt": "",
-    "createdBy": "",
-    "criteriaExternalId": "",
-    "criteriaId": "",
-    "criteriaName": "",
-    "evidence_count": "",
-    "evidences": "",
-    "isAPrivateProgram": "",
-    "organisation_id": "",
-    "organisation_name": "",
-    "questionAnswer": "",
-    "questionECM": "",
-    "questionExternalId": "",
-    "questionId": "",
-    "questionName": "",
-    "questionResponseLabel": "",
-    "questionResponseLabel_number": "",
-    "questionResponseType": "",
-    "remarks": "",
-    "solutionExternalId": "",
-    "solutionId": "",
-    "solutionName": "",
-    "surveyId": "",
-    "surveyName": "",
-    "surveySubmissionId": "",
-    "total_evidences": "",
-    "updatedAt": "",
-    "user_type": ""
-}
-
-slSurveyMeta = {
-    "completedDate": "",
-    "createdBy": "",
-    "createdAt": "",
-    "isAPrivateProgram": "",
-    "organisationName": "",
-    "solutionExternalId": "",
-    "solutionId": "",
-    "solutionName": "",
-    "surveyName": "",
-    "surveySubmissionId": "",
-    "surveyId": "",
-    "userProfile": ""
-}
-
-slSurveyStatusStarted = {
-    "startedAt": "",
-    "surveySubmissionId": ""
-}
-
-slSurveyStatusInprogress = {
-    "inprogressAt": "",
-    "surveySubmissionId": ""
-}
-
-slSurveyStatusCompleted = {
-    "completedAt": "",
-    "surveySubmissionId": ""
-}
-
-def send_to_kafka(topic, data):
+def send_data_to_kafka(data, datasource,topic, producer):
     try:
-        producer.send(topic, json.dumps(data).encode('utf-8'))
+        # Convert data to appropriate format (e.g., json)a
+        value = json.dumps(data).encode('utf-8')
+        future = producer.send(topic, value=value)
         producer.flush()
-        print(f"Sent data to {topic}: {data}")
+        record_metadata = future.get()
+        print(record_metadata)
+        # Add error handling and delivery callbacks if needed
+        print(f"successfully send data to {datasource} datasource")
     except Exception as e:
-        print(f"Failed to send data to {topic}: {e}")
+        print(f"failed to send data to {datasource}datasource")
 
-# Sending survey data
-send_to_kafka(config.get("KAFKA", "survey_druid_topic"), slSurvey)
-  
-send_to_kafka(config.get("KAFKA", "survey_meta_druid_topic"), slSurveyMeta)
+def process_json_file(file_path,producer):
+    with open(file_path, 'r') as f:
+        data = json.load(f)
+        # Extract desired columns or keys
+        extracted_data = data["columns"]  # Replace with your extraction logic
+        datasource = data['datasource']
+        topic = config.get("KAFKA", data["kafka_topic"])
+        send_data_to_kafka(extracted_data,datasource, topic, producer)
 
-send_to_kafka(config.get("KAFKA", "survey_started_druid_topic"), slSurveyStatusStarted)
-   
-send_to_kafka(config.get("KAFKA", "survey_inprogress_druid_topic"), slSurveyStatusInprogress)
+def main():
+    # Kafka configuration
+    kafka_url = config.get("KAFKA", "url")
+    producer = KafkaProducer(bootstrap_servers=[kafka_url])
+    util_folder = 'Util'
 
-send_to_kafka(config.get("KAFKA", "survey_completed_druid_topic"), slSurveyStatusCompleted)
+    for file in os.listdir(util_folder):
+        if file.endswith('.json'):
+            file_path = os.path.join(util_folder, file)
+            process_json_file(file_path,producer)
 
-# Sending observation data
-send_to_kafka(config.get("KAFKA", "observation_druid_topic"), slObservation)
+    producer.flush()
+    producer.close()
 
-send_to_kafka(config.get("KAFKA", "observation_meta_druid_topic"), slObservationMeta)
-
-send_to_kafka(config.get("KAFKA", "observation_started_druid_topic"), slObservationStatusStarted)
-
-send_to_kafka(config.get("KAFKA", "observation_inprogress_druid_topic"), slObservationStatusInprogress)
-
-send_to_kafka(config.get("KAFKA", "observation_completed_druid_topic"), slObservationStatusCompleted)
+if __name__ == '__main__':
+    main()
