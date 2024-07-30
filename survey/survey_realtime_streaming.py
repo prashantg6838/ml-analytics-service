@@ -513,8 +513,10 @@ def obj_creation(obSub):
                                             except KeyError:
                                                 pass
                                     return list_message_id_fetch,flag_count_fetch
-                                except KeyError:
-                                    pass
+                                except Exception as e:
+                                    errorLogger.error(e, exc_info=True)
+                                    # Ensure the function returns even in case of an exception
+                                    return [], 0
 
                             # Check response type and call function to fetch question details
                             if (
