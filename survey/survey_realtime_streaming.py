@@ -720,9 +720,8 @@ async def surveyFaust(consumer):
             flag_count = flag_count + flag_count_main 
             print(list_message_id)
             print(flag_count)
-            has_duplicates = len(list_message_id) != len(set(list_message_id))
             has_null_values = any(value is None for value in list_message_id)
-            if (has_duplicates == False) and (has_null_values == False) : 
+            if (has_null_values == False) : 
                 if (len(list_message_id) != 0) and (flag_count != 0):
                     if len(list_message_id) == flag_count:
                         try : 
