@@ -718,8 +718,6 @@ async def surveyFaust(consumer):
             list_message_id_main , flag_count_main = main_data_extraction(msg_data)
             list_message_id.extend(list_message_id_main)
             flag_count = flag_count + flag_count_main 
-            print(list_message_id)
-            print(flag_count)
             has_null_values = any(value is None for value in list_message_id)
             if (has_null_values == False) : 
                 if (len(list_message_id) != 0) and (flag_count != 0):
