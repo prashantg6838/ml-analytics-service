@@ -25,26 +25,32 @@ def send_data_to_kafka(data, datasource,topic, producer):
     except Exception as e:
         print(f"failed to send data to {datasource}datasource")
 
-def process_json_file(file_path,producer):
+# def process_json_file(file_path,producer):
+#     with open(file_path, 'r') as f:
+#         data = json.load(f)
+#         # Extract desired columns or keys
+#         extracted_data = data["columns"]  # Replace with your extraction logic
+#         datasource = data['datasource']
+#         topic = config.get("KAFKA", data["kafka_topic"])
+#         send_data_to_kafka(extracted_data,datasource, topic, producer)
+
+def process_json_file(file_path, producer):
     with open(file_path, 'r') as f:
         data = json.load(f)
-        # Extract desired columns or keys
-        extracted_data = data["columns"]  # Replace with your extraction logic
-        datasource = data['datasource']
-        topic = config.get("KAFKA", data["kafka_topic"])
-        send_data_to_kafka(extracted_data,datasource, topic, producer)
+        # Assuming data is a list of JSON objects
+        for json_obj in data:
+            extracted_data = json_obj["columns"]  # Replace with your extraction logic
+            datasource = json_obj['datasource']
+            topic = config.get("KAFKA", json_obj["kafka_topic"])
+            send_data_to_kafka(extracted_data, datasource, topic, producer)
 
 def main():
     # Kafka configuration
     kafka_url = config.get("KAFKA", "url")
     producer = KafkaProducer(bootstrap_servers=[kafka_url])
     util_folder = 'Util'
-
-    for file in os.listdir(util_folder):
-        if file.endswith('.json'):
-            file_path = os.path.join(util_folder, file)
-            process_json_file(file_path,producer)
-
+    file_path = os.path.join(util_folder, 'datasources.json')
+    process_json_file(file_path,producer)
     producer.flush()
     producer.close()
 
