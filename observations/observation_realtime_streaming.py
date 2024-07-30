@@ -136,12 +136,10 @@ def check_observation_submission_id_existance(observationId,column_name,table_na
     errorLogger.error(e,exc_info=True)
 
 def set_null_value(data):
-  if "userProfile" in data :
+  if ("userProfile" in data) and ("organisationName" in data):
     if config.get("OUTPUT_DIR","CAPTURE_USER_PROFILE") == "False":
       data['userProfile'] = ''
-  if "organisationName" in data:
-    if config.get("OUTPUT_DIR","CAPTURE_USER_PROFILE") == "False":
-      data['organisationName'] = ''
+      data['organisationName'] = ''        
   return data
 
 def send_data_to_kafka(data,topic):
